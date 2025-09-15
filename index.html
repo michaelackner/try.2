@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VARO REBILLING</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-icon">
+                        <!-- Simple barrel of oil icon -->
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <!-- Top ellipse -->
+                            <ellipse cx="12" cy="5" rx="6" ry="2"></ellipse>
+                            <!-- Body -->
+                            <rect x="6" y="5" width="12" height="14" rx="2" ry="2"></rect>
+                            <!-- Bottom ellipse -->
+                            <ellipse cx="12" cy="19" rx="6" ry="2"></ellipse>
+                            <!-- Hoops -->
+                            <line x1="6" y1="9" x2="18" y2="9"></line>
+                            <line x1="6" y1="15" x2="18" y2="15"></line>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <h1>VARO REBILLING</h1>
+                        <p>automating cost rebilling</p>
+                    </div>
+                    <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark">
+                        <span class="theme-icon" aria-hidden="true">🌙</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <!-- Upload Section -->
+            <section class="upload-card">
+                <div class="card-header">
+                    <h2>Data Import</h2>
+                    <p>Upload your petroleum trading data for analysis</p>
+                </div>
+                <div class="upload-area">
+                    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+                    <label for="fileInput" class="upload-zone">
+                        <div class="upload-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                            </svg>
+                        </div>
+                        <div class="upload-text">
+                            <span class="upload-title">Choose Excel File</span>
+                            <span class="upload-subtitle">Drag & drop or click to browse</span>
+                        </div>
+                    </label>
+                    <div class="file-selected" id="fileInfo" style="display: none;">
+                        <div class="file-details">
+                            <span id="fileName"></span>
+                            <button id="clearFile" class="clear-btn">×</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Settings (Hidden by default) -->
+                <details class="advanced-config">
+                    <summary>Configuration Settings</summary>
+                    <div class="config-grid">
+                        <input type="text" id="outputSheetName" value="Q1-Q2-Q3-Q4-2024" placeholder="Output Sheet">
+                        <input type="text" id="rawSheet1Name" placeholder="position_list1039861856">
+                        <input type="text" id="rawSheet2Name" placeholder="RPT_ALL_COSTS_V2_GVA">
+                        <input type="text" id="rawSheet3Name" placeholder="RPT_POSITION_LIST">
+                        <input type="text" id="dealColumnName" value="N" placeholder="Deal Column">
+                    </div>
+                </details>
+
+                <!-- Process Button -->
+                <div class="action-section">
+                    <button id="processButton" class="process-btn" disabled>
+                        <span>Process Data</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+                        </svg>
+                    </button>
+                    <div id="loadingSpinner" class="loading-indicator" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <span>Processing petroleum data...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Error Messages -->
+            <section class="error-card" id="errorSection" style="display: none;">
+                <div class="error-content">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
+                    </svg>
+                    <span id="errorMessage"></span>
+                </div>
+            </section>
+
+            <!-- Analytics Dashboard -->
+            <section class="analytics-dashboard" id="resultsSection" style="display: none;">
+                <div class="dashboard-header-section">
+                    <h2>Analytics Overview</h2>
+                    <button id="downloadButton" class="download-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" />
+                        </svg>
+                        Download Report
+                    </button>
+                </div>
+
+                <!-- Key Metrics Cards -->
+                <div class="metrics-grid">
+                    <div class="metric-card primary">
+                        <div class="metric-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19,3H5C3.9,3 3,3.9 3,5V19C3,20.1 3.9,21 5,21H19C20.1,21 21,20.1 21,19V5C21,3.9 20.1,3 19,3M5,19V5H19V19H5Z"/>
+                            </svg>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value" id="totalDeals">-</div>
+                            <div class="metric-label">Total Deals</div>
+                        </div>
+                    </div>
+
+                    <div class="metric-card secondary">
+                        <div class="metric-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M7.07,18.28C7.5,17.38 8.12,16.19 8.91,14.79C9.71,13.39 10.5,11.83 11.24,10.16C11.73,9.05 12.18,7.92 12.6,6.78C13.08,7.74 13.62,8.69 14.23,9.63C15.45,11.49 16.96,13.22 18.76,14.8C19.17,15.18 19.62,15.54 20.09,15.87C18.58,17.25 16.69,18.16 14.59,18.43C14.5,18.22 14.27,17.96 13.89,17.63C12.79,16.74 11.79,15.8 10.89,14.81C9.99,13.82 9.21,12.77 8.54,11.67C8.21,11.12 7.91,10.55 7.64,9.96C7.37,10.89 7.16,11.84 7.03,12.82C6.85,14.05 6.9,15.3 7.18,16.5C7.27,16.92 7.39,17.33 7.54,17.73C7.05,17.94 6.54,18.12 6.03,18.25C6.37,18.28 6.72,18.29 7.07,18.28Z"/>
+                            </svg>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value" id="totalVolume">-</div>
+                            <div class="metric-label">Total Volume (BBL)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Distribution (interactive and above the fold) -->
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Product Distribution</h3>
+                        <div class="chart-subtitle">Share of total volume by product</div>
+                        <div class="chart-mode-toggle" role="tablist" aria-label="Chart Display Mode">
+                            <button class="chart-mode-btn active" data-chart="bar" role="tab" aria-selected="true">Bar</button>
+                            <button class="chart-mode-btn" data-chart="doughnut" role="tab" aria-selected="false">Donut</button>
+                        </div>
+                    </div>
+                    <div class="chart-badge">Top 6 + Other</div>
+                    <div class="range-toggle" role="tablist" aria-label="Date Range">
+                        <button class="range-btn active" data-range="ALL" role="tab" aria-selected="true">All</button>
+                        <button class="range-btn" data-range="YTD" role="tab" aria-selected="false">YTD</button>
+                        <button class="range-btn" data-range="QTD" role="tab" aria-selected="false">QTD</button>
+                        <button class="range-btn" data-range="MTD" role="tab" aria-selected="false">MTD</button>
+                    </div>
+                    <div class="chart-content" style="align-items:center;">
+                        <canvas id="productChartCanvas" width="900" height="360" style="max-width:100%"></canvas>
+                    </div>
+                    <div class="chart-actions" id="chartActions">
+                        <button class="btn ghost" id="exportPngBtn" aria-label="Export chart as PNG">Export PNG</button>
+                        <button class="btn ghost" id="copyCsvBtn" aria-label="Copy chart data as CSV">Copy CSV</button>
+                        <button class="btn" id="resetFilterBtn" aria-label="Reset product filter">Reset Filter</button>
+                    </div>
+                    <div id="toast" aria-live="polite" class="toast" style="display:none"></div>
+                    <div class="chart-table-wrap">
+                        <table class="data-table" id="detailsTable" aria-label="Deal details">
+                            <thead>
+                                <tr>
+                                    <th data-sort="deal">Deal</th>
+                                    <th data-sort="product">Product</th>
+                                    <th data-sort="volume">Volume (BBL)</th>
+                                    <th data-sort="date">Date</th>
+                                    <th data-sort="location">Location</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                
+            </section>
+        </main>
+
+        <!-- Signature -->
+        <div class="dashboard-signature" aria-label="built with love by ilc">
+            built with <span class="heart">❤</span> by <span class="signature-name">ilc</span>
+        </div>
+    </div>
+
+    <!-- Include stable SheetJS build for reliable Excel parsing -->
+    <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js for interactive product distribution -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Chart.js for interactive product distribution -->
+    <script src="app.js"></script>
+</body>
+</html>

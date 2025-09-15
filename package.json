@@ -1,0 +1,20 @@
+{
+  "name": "excel-processor",
+  "version": "1.0.0",
+  "description": "No-code Excel processing web application",
+  "main": "index.html",
+  "scripts": {
+    "start": "live-server --port=8080",
+    "dev": "live-server --port=8080 --watch=.",
+    "serve:api": "python3 server.py",
+    "tunnel": "node tunnel.js"
+  },
+  "dependencies": {
+    "localtunnel": "^2.0.2",
+    "xlsx": "^0.18.5",
+    "xlsx-style": "^0.8.13"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}
