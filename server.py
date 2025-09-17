@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import get_column_letter, column_index_from_string
 from typing import Dict, Any, List, Set, Optional
 
 app = FastAPI(title="VARO REBILLING Excel Processor", version="1.0.0")
@@ -94,8 +94,35 @@ class ExcelProcessor:
 
         # Verify essential data exists
         sheet1 = self.workbook[raw_sheet1]
+        sheet2 = self.workbook[raw_sheet2]
+        sheet3 = self.workbook[raw_sheet3]
         if sheet1.max_row < 2:
             raise ValueError("Raw Sheet 1 must have at least one data row")
+
+        # Validate required columns for each sheet
+        self._validate_columns(
+            sheet1,
+            ['B', 'AA', 'M', 'L', 'Q', 'AB', 'AD', 'AL', 'X', 'BZ'],
+            f"Raw Sheet 1 '{raw_sheet1}'"
+        )
+        self._validate_columns(
+            sheet2,
+            ['N', 'AQ', 'AV'],
+            f"Raw Sheet 2 '{raw_sheet2}'"
+        )
+        self._validate_columns(
+            sheet3,
+            ['M', 'BR', 'CN'],
+            f"Raw Sheet 3 '{raw_sheet3}'"
+        )
+
+    def _validate_columns(self, worksheet, required_columns: List[str], sheet_label: str) -> None:
+        """Ensure the worksheet contains the required columns"""
+        max_column = worksheet.max_column or 0
+        for column_letter in required_columns:
+            column_index = column_index_from_string(column_letter)
+            if column_index > max_column:
+                raise ValueError(f"{sheet_label} is missing required column {column_letter}")
 
     def build_step1_report(self, settings: Dict[str, Any]) -> Workbook:
         """Step 1: Create formatted report with proper column mapping"""
