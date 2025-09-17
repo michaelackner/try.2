@@ -177,12 +177,23 @@ class ExcelProcessor:
 
         mapped_data.sort(key=date_sort_key)
 
+        # Apply duplicate deal rule - keep only first occurrence of each deal (column B)
+        filtered_data = []
+        seen_deals = set()
+        for row_data in mapped_data:
+            deal_value = self.normalize(row_data[1]) if len(row_data) > 1 else ''
+            if deal_value and deal_value != 'VSA DEAL':
+                if deal_value in seen_deals:
+                    continue
+                seen_deals.add(deal_value)
+            filtered_data.append(row_data)
+
         # Group by month and add to worksheet
         current_row = 3  # Start at row 3 (after header and blank row)
         current_month = None
         current_year = None
 
-        for row_data in mapped_data:
+        for row_data in filtered_data:
             date_val = self.parse_date(row_data[19])
 
             if date_val:
