@@ -20,8 +20,6 @@ class ExcelProcessor {
         this.productChartType = 'bar';
         this.setupEventListeners();
 
-        // Initialize theme from storage or system
-        this.initTheme();
     }
 
     getDefaultApiBaseUrl() {
@@ -201,11 +199,6 @@ class ExcelProcessor {
             this.setChartMode(type);
         });
 
-        // Theme toggle
-        const themeToggle = document.getElementById('themeToggle');
-        if (themeToggle) {
-            themeToggle.addEventListener('click', () => this.toggleTheme());
-        }
     }
 
     handleFileSelect(event, type) {
@@ -791,40 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
     new ExcelProcessor();
 });
 
-    // ---- Mapping helpers ----
-ExcelProcessor.prototype.initTheme = function() {
-    const stored = localStorage.getItem('theme');
-    let theme = stored;
-    if (!theme) {
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        theme = prefersDark ? 'dark' : 'light';
-    }
-    this.setTheme(theme);
-};
-
-ExcelProcessor.prototype.setTheme = function(theme) {
-    const root = document.documentElement;
-    if (theme === 'dark') {
-        root.setAttribute('data-theme', 'dark');
-    } else {
-        root.removeAttribute('data-theme');
-        theme = 'light';
-    }
-    localStorage.setItem('theme', theme);
-    const btn = document.getElementById('themeToggle');
-    if (btn) {
-        const icon = btn.querySelector('.theme-icon');
-        if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
-        btn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
-        btn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
-    }
-};
-
-ExcelProcessor.prototype.toggleTheme = function() {
-    const current = localStorage.getItem('theme') || 'light';
-    this.setTheme(current === 'dark' ? 'light' : 'dark');
-};
-
+// ---- Mapping helpers ----
 ExcelProcessor.prototype.buildGeoLookup = function() {
     // Minimal built-in geocoder for common ports/cities.
     // Extend this as needed or wire to a backend geocoder.

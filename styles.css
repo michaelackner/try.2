@@ -79,30 +79,6 @@ body, .dashboard, .dashboard-main, .dashboard-header {
     background-color: #ffffff;
 }
 
-/* Explicit Dark Theme via data attribute */
-[data-theme="dark"] {
-    --white: #1e293b;
-    --gray-50: #0f172a;
-    --gray-100: #1e293b;
-    --gray-200: #334155;
-    --gray-300: #475569;
-    --gray-400: #64748b;
-    --gray-500: #94a3b8;
-    --gray-600: #cbd5e1;
-    --gray-700: #e2e8f0;
-    --gray-800: #f1f5f9;
-    --gray-900: #f8fafc;
-}
-
-[data-theme="dark"] body {
-    background: var(--gray-50);
-    color: var(--gray-900);
-}
-
-[data-theme="dark"] .leaflet-container { background: #1e293b; filter: brightness(0.8) contrast(1.1); }
-[data-theme="dark"] .leaflet-control-attribution { background: rgba(30,41,59,0.9); color: var(--gray-400); }
-[data-theme="dark"] .map-legend { background: rgba(30,41,59,0.95); border-color: var(--gray-600); color: var(--gray-300); }
-
 /* Dashboard Layout */
 .dashboard {
     min-height: 100vh;
@@ -132,24 +108,6 @@ body, .dashboard, .dashboard-main, .dashboard-header {
     justify-content: center;
     gap: var(--space-md);
 }
-
-/* Theme Toggle */
-.theme-toggle {
-    margin-left: auto;
-    border: 1px solid var(--gray-200);
-    background: var(--white);
-    color: var(--gray-700);
-    border-radius: 999px;
-    padding: 6px 10px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    box-shadow: var(--shadow-sm);
-    transition: all 0.15s ease;
-}
-.theme-toggle:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
-.theme-toggle .theme-icon { font-size: 16px; line-height: 1; }
 
 .logo-icon {
     width: 48px;
