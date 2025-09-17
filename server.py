@@ -9,6 +9,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 from typing import Dict, Any, List, Set, Optional
+from numbers import Number
 
 app = FastAPI(title="VARO REBILLING Excel Processor", version="1.0.0")
 
@@ -221,10 +222,10 @@ class ExcelProcessor:
             # Rule 1: WHB+CIF deals - set insurance columns I,J to 0 and lock
             if deal and deal in self.lookup_tables.get('whb_cif_deals', set()):
                 if f"{row_idx},9" not in locks:  # Column I (index 9)
-                    ws.cell(row=row_idx, column=9, value=0)
+                    self.set_numeric_cell_value(ws, row_idx, 9, 0)
                     locks.add(f"{row_idx},9")
                 if f"{row_idx},10" not in locks:  # Column J (index 10)
-                    ws.cell(row=row_idx, column=10, value=0)
+                    self.set_numeric_cell_value(ws, row_idx, 10, 0)
                     locks.add(f"{row_idx},10")
 
             # Rule 2: LC Costs (E) - BOT + BLC totals
@@ -233,19 +234,19 @@ class ExcelProcessor:
                 blc_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},BLC", 0)
                 total_cost = bot_cost + blc_cost
                 if total_cost != 0:
-                    ws.cell(row=row_idx, column=5, value=total_cost)
+                    self.set_numeric_cell_value(ws, row_idx, 5, total_cost)
 
             # Rule 3: CIN insurance (I) - CIN costs
             if f"{row_idx},9" not in locks and ws.cell(row=row_idx, column=9).value != 0:
                 cin_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},CIN", 0)
                 if cin_cost != 0:
-                    ws.cell(row=row_idx, column=9, value=cin_cost)
+                    self.set_numeric_cell_value(ws, row_idx, 9, cin_cost)
 
             # Rule 4: CLI insurance (J) - CLI costs
             if f"{row_idx},10" not in locks and ws.cell(row=row_idx, column=10).value != 0:
                 cli_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},CLI", 0)
                 if cli_cost != 0:
-                    ws.cell(row=row_idx, column=10, value=cli_cost)
+                    self.set_numeric_cell_value(ws, row_idx, 10, cli_cost)
 
             # Rule 5: INS/INQ/INA insurance (F) - Load inspection costs
             if f"{row_idx},6" not in locks and ws.cell(row=row_idx, column=6).value != 0:
@@ -254,7 +255,7 @@ class ExcelProcessor:
                 ina_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},INA", 0)
                 total_inspection_cost = ins_cost + inq_cost + ina_cost
                 if total_inspection_cost != 0:
-                    ws.cell(row=row_idx, column=6, value=total_inspection_cost)
+                    self.set_numeric_cell_value(ws, row_idx, 6, total_inspection_cost)
 
             # Rule 6: TOTAL calculation (L) - SUM(E:K)
             total = 0
@@ -262,7 +263,7 @@ class ExcelProcessor:
                 val = ws.cell(row=row_idx, column=col).value
                 if val and isinstance(val, (int, float)):
                     total += val
-            ws.cell(row=row_idx, column=12, value=total)  # Column L
+            self.set_numeric_cell_value(ws, row_idx, 12, total)  # Column L
 
             # Rule 7: VSA comments (U) - from hedge lookup
             if hedge and hedge in self.lookup_tables.get('hedge_to_br', {}):
@@ -443,14 +444,14 @@ class ExcelProcessor:
                     new_value = row_values[col_idx - 1]
                     old_value = existing_values[col_idx - 1]
 
-                    if self.values_differ(new_value, old_value):
+                    if self.values_differ(new_value, old_value) and self.should_highlight_cell(col_idx, new_value):
                         cell = ws.cell(row=row_idx, column=col_idx)
                         self.mark_cell_red(cell)
             else:
                 # Entire deal is new – mark populated cells
                 for col_idx in range(1, 23):
                     cell = ws.cell(row=row_idx, column=col_idx)
-                    if not self.is_blank(cell.value):
+                    if not self.is_blank(cell.value) and self.should_highlight_cell(col_idx, cell.value):
                         self.mark_cell_red(cell)
 
         missing_deals = sorted(set(existing_rows.keys()) - seen_deals)
@@ -476,7 +477,7 @@ class ExcelProcessor:
 
                 for col_idx in range(1, 4):
                     cell = discrepancy_ws.cell(row=row_offset, column=col_idx)
-                    if not self.is_blank(cell.value):
+                    if not self.is_blank(cell.value) and self.should_highlight_cell(col_idx, cell.value):
                         self.mark_cell_red(cell)
 
             # Set simple column widths for readability
@@ -535,6 +536,46 @@ class ExcelProcessor:
             return abs(new_float - old_float) > 0.0001
         except (TypeError, ValueError):
             return new_value != old_value
+
+    def should_highlight_cell(self, col_idx: int, value) -> bool:
+        """Determine if a cell should be highlighted based on column and value."""
+
+        if value is None:
+            return False
+
+        # Skip comment columns (M, U, V)
+        if col_idx in {13, 21, 22}:
+            return False
+
+        return self.is_numeric_value(value)
+
+    def set_numeric_cell_value(self, worksheet, row_idx: int, col_idx: int, new_value) -> None:
+        """Set a numeric cell value and highlight if it changed."""
+
+        cell = worksheet.cell(row=row_idx, column=col_idx)
+        previous_value = cell.value
+        cell.value = new_value
+
+        if self.values_differ(new_value, previous_value) and self.should_highlight_cell(col_idx, new_value):
+            self.mark_cell_red(cell)
+
+    def is_numeric_value(self, value) -> bool:
+        """Return True if the provided value is numeric or can be safely cast to float."""
+
+        if isinstance(value, bool):
+            return False
+
+        if isinstance(value, Number):
+            return True
+
+        if isinstance(value, str):
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return False
+
+        return False
 
     def mark_cell_red(self, cell) -> None:
         """Apply a red font color to highlight changes without altering other attributes."""
