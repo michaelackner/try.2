@@ -15,6 +15,7 @@ A modern web application that processes multi-sheet Excel files to create format
 - **Two-Step Processing**:
   - **Step 1**: Creates formatted report with headers A-V and applies styling
   - **Step 2**: Enriches data using lookup tables and business rules
+- **Workbook Comparison**: Optionally upload an existing formatted workbook to highlight deltas, append new deals, and list missing entries
 - **Dashboard Metrics**: Displays total deals, volume, and product distribution
 - **Perfect Formatting**: Bold headers, yellow month cells, column borders, and proper alignment
 - **Download**: Exports final Excel workbook with professional formatting

@@ -26,13 +26,17 @@ class ExcelProcessor {
     }
 
     setupEventListeners() {
-        const fileInput = document.getElementById('fileInput');
-        const clearFile = document.getElementById('clearFile');
+        const rawFileInput = document.getElementById('rawFileInput');
+        const formattedFileInput = document.getElementById('formattedFileInput');
+        const clearRawFile = document.getElementById('clearRawFile');
+        const clearFormattedFile = document.getElementById('clearFormattedFile');
         const processButton = document.getElementById('processButton');
         const downloadButton = document.getElementById('downloadButton');
 
-        fileInput.addEventListener('change', this.handleFileSelect.bind(this));
-        clearFile.addEventListener('click', this.clearFile.bind(this));
+        rawFileInput.addEventListener('change', (event) => this.handleFileSelect(event, 'raw'));
+        formattedFileInput.addEventListener('change', (event) => this.handleFileSelect(event, 'formatted'));
+        clearRawFile.addEventListener('click', () => this.clearFile('raw'));
+        clearFormattedFile.addEventListener('click', () => this.clearFile('formatted'));
         processButton.addEventListener('click', this.processFile.bind(this));
         downloadButton.addEventListener('click', this.downloadFile.bind(this));
 
@@ -59,33 +63,51 @@ class ExcelProcessor {
         }
     }
 
-    handleFileSelect(event) {
+    handleFileSelect(event, type) {
         const file = event.target.files[0];
-        if (!file) return;
+        const isRaw = type === 'raw';
 
-        const fileInfo = document.getElementById('fileInfo');
-        const fileName = document.getElementById('fileName');
-        const processButton = document.getElementById('processButton');
+        if (!file) {
+            this.clearFile(type);
+            return;
+        }
 
-        fileName.textContent = file.name;
-        fileInfo.style.display = 'flex';
-        processButton.disabled = false;
+        if (!file.name.match(/\.(xlsx|xls)$/i)) {
+            this.showError('Please select a valid Excel file (.xlsx or .xls)');
+            event.target.value = '';
+            this.clearFile(type);
+            return;
+        }
 
-        this.hideError();
-        this.hideResults();
+        const fileInfo = document.getElementById(isRaw ? 'rawFileInfo' : 'formattedFileInfo');
+        const fileName = document.getElementById(isRaw ? 'rawFileName' : 'formattedFileName');
+
+        if (fileName) fileName.textContent = file.name;
+        if (fileInfo) fileInfo.style.display = 'flex';
+
+        if (isRaw) {
+            const processButton = document.getElementById('processButton');
+            processButton.disabled = false;
+            this.hideError();
+            this.hideResults();
+        }
     }
 
-    clearFile() {
-        const fileInput = document.getElementById('fileInput');
-        const fileInfo = document.getElementById('fileInfo');
-        const processButton = document.getElementById('processButton');
+    clearFile(type) {
+        const isRaw = type === 'raw';
+        const fileInput = document.getElementById(isRaw ? 'rawFileInput' : 'formattedFileInput');
+        const fileInfo = document.getElementById(isRaw ? 'rawFileInfo' : 'formattedFileInfo');
 
-        fileInput.value = '';
-        fileInfo.style.display = 'none';
-        processButton.disabled = true;
+        if (fileInput) fileInput.value = '';
+        if (fileInfo) fileInfo.style.display = 'none';
 
-        this.hideError();
-        this.hideResults();
+        if (isRaw) {
+            const processButton = document.getElementById('processButton');
+            processButton.disabled = true;
+            this.processedData = null;
+            this.hideError();
+            this.hideResults();
+        }
     }
 
     async processFile() {
@@ -94,14 +116,13 @@ class ExcelProcessor {
         this.hideResults();
 
         try {
-            const fileInput = document.getElementById('fileInput');
+            const fileInput = document.getElementById('rawFileInput');
             const file = fileInput.files[0];
 
             if (!file) {
                 throw new Error('No file selected');
             }
 
-            // Validate file type
             if (!file.name.match(/\.(xlsx|xls)$/i)) {
                 throw new Error('Please select a valid Excel file (.xlsx or .xls)');
             }
@@ -559,18 +580,23 @@ class ExcelProcessor {
         if (!this.processedData) return;
 
         try {
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
+            const rawFileInput = document.getElementById('rawFileInput');
+            const formattedFileInput = document.getElementById('formattedFileInput');
+            const rawFile = rawFileInput.files[0];
+            const formattedFile = formattedFileInput.files[0];
 
-            if (!file) {
-                throw new Error('No file selected');
+            if (!rawFile) {
+                throw new Error('No raw data file selected');
             }
 
             const settings = this.getSettings();
 
             // Create FormData for the Python backend
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', rawFile);
+            if (formattedFile) {
+                formData.append('existing_file', formattedFile);
+            }
             formData.append('output_sheet_name', settings.outputSheetName || 'Q1-Q2-Q3-Q4-2024');
             formData.append('raw_sheet1_name', settings.rawSheet1Name || '');
             formData.append('raw_sheet2_name', settings.rawSheet2Name || '');
