@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, Form, File
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from io import BytesIO
@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import get_column_letter, column_index_from_string
 from typing import Dict, Any, List, Set, Optional
 
 app = FastAPI(title="VARO REBILLING Excel Processor", version="1.0.0")
@@ -96,6 +96,25 @@ class ExcelProcessor:
         sheet1 = self.workbook[raw_sheet1]
         if sheet1.max_row < 2:
             raise ValueError("Raw Sheet 1 must have at least one data row")
+
+        required_columns_step1 = ['B', 'AA', 'M', 'L', 'Q', 'AB', 'AD', 'AL', 'X', 'BZ']
+        required_columns_step2 = ['N', 'AQ', 'AV']
+        required_columns_step3 = ['M', 'BR', 'CN']
+
+        self.validate_required_columns(sheet1, raw_sheet1, required_columns_step1)
+        sheet2 = self.workbook[raw_sheet2]
+        sheet3 = self.workbook[raw_sheet3]
+        self.validate_required_columns(sheet2, raw_sheet2, required_columns_step2)
+        self.validate_required_columns(sheet3, raw_sheet3, required_columns_step3)
+
+    def validate_required_columns(self, sheet, sheet_name: str, required_columns: List[str]) -> None:
+        """Ensure the sheet includes the required columns."""
+        max_col = sheet.max_column or 0
+
+        for column in required_columns:
+            column_index = column_index_from_string(column)
+            if column_index > max_col:
+                raise ValueError(f"Required column {column} not found in sheet {sheet_name}")
 
     def build_step1_report(self, settings: Dict[str, Any]) -> Workbook:
         """Step 1: Create formatted report with proper column mapping"""
@@ -626,7 +645,7 @@ async def process_excel(
         )
 
     except Exception as e:
-        return {"error": str(e)}
+        return JSONResponse({"error": str(e)}, status_code=400)
 
 @app.get("/health")
 async def health_check():
