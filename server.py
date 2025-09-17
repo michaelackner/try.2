@@ -224,13 +224,11 @@ class ExcelProcessor:
                     ws.cell(row=row_idx, column=10, value=0)
                     locks.add(f"{row_idx},10")
 
-            # Rule 3: LC Costs (E) - BOT + BLC totals
+            # Rule 3: LC Costs (E) - BLC totals only
             if f"{row_idx},5" not in locks and ws.cell(row=row_idx, column=5).value != 0:
-                bot_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},BOT", 0)
                 blc_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},BLC", 0)
-                total_cost = bot_cost + blc_cost
-                if total_cost != 0:
-                    ws.cell(row=row_idx, column=5, value=total_cost)
+                if blc_cost != 0:
+                    ws.cell(row=row_idx, column=5, value=blc_cost)
 
             # Rule 4: CIN insurance (I) - CIN costs
             if f"{row_idx},9" not in locks and ws.cell(row=row_idx, column=9).value != 0:

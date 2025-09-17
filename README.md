@@ -107,7 +107,7 @@ The Excel file must contain 3 sheets:
 ### Step 2: Business Rules
 1. **MIDLANDS Product**: Sets columns E-K to 0 and locks them
 2. **WHB+CIF Deals**: Sets insurance columns I,J to 0 and locks them
-3. **LC Costs**: Populates column E with BOT+BLC cost totals
+3. **LC Costs**: Populates column E with BLC cost totals
 4. **CIN Insurance**: Populates column I with CIN costs
 5. **CLI Insurance**: Populates column J with CLI costs
 6. **TOTAL Formula**: Column L = SUM(E:K)
@@ -122,7 +122,7 @@ The Excel file must contain 3 sheets:
 | B | VSA deal | Mapped from raw B |
 | C | VESSEL | Mapped from raw AA |
 | D | VMAG % | |
-| E | L/C costs | BOT+BLC totals |
+| E | L/C costs | BLC totals |
 | F | Load insp | |
 | G | Discharge inspection | |
 | H | Superintendent | |
