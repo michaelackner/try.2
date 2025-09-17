@@ -4,9 +4,9 @@ class ExcelProcessor {
         this.processedData = null;
         this.summaryMetrics = {};
         // API Configuration
-        this.apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? 'http://localhost:8000'
-            : window.location.origin;
+        this.apiBaseUrl = null;
+        this.apiBaseUrlFallback = this.getDefaultApiBaseUrl();
+        this.apiBaseUrlReady = this.initializeApiBaseUrl();
         // Map state
         this.map = null;
         this.mapLayerGroup = null;
@@ -23,6 +23,156 @@ class ExcelProcessor {
 
         // Initialize theme from storage or system
         this.initTheme();
+    }
+
+    getDefaultApiBaseUrl() {
+        try {
+            const { protocol, hostname, port, origin } = window.location;
+
+            if (protocol === 'file:' || !hostname) {
+                // Opening the dashboard directly from the filesystem.
+                return 'http://127.0.0.1:8000';
+            }
+
+            const normalizedProtocol = protocol === 'https:' ? 'https:' : 'http:';
+
+            if (['localhost', '127.0.0.1', '::1'].includes(hostname)) {
+                return `${normalizedProtocol}//${hostname}:8000`;
+            }
+
+            if (port && !['80', '443', '8000', ''].includes(port)) {
+                return `${normalizedProtocol}//${hostname}:8000`;
+            }
+
+            if (origin && origin !== 'null') {
+                return origin;
+            }
+
+            return `${normalizedProtocol}//${hostname}${port ? `:${port}` : ''}`;
+        } catch (error) {
+            console.warn('Failed to determine default API base URL', error);
+            return 'http://127.0.0.1:8000';
+        }
+    }
+
+    buildApiBaseCandidates() {
+        const candidates = [];
+
+        const pushCandidate = (value) => {
+            if (!value || typeof value !== 'string') return;
+            const trimmed = value.trim();
+            if (trimmed) candidates.push(trimmed);
+        };
+
+        // Manual overrides (global, query parameter, meta tag)
+        if (typeof window !== 'undefined' && window.API_BASE_URL) {
+            pushCandidate(window.API_BASE_URL);
+        }
+
+        try {
+            const params = new URLSearchParams(window.location.search || '');
+            pushCandidate(params.get('api'));
+            pushCandidate(params.get('apiBase'));
+            pushCandidate(params.get('api_base'));
+        } catch (error) {
+            console.warn('Unable to parse query parameters for API base override', error);
+        }
+
+        const metaTag = document.querySelector('meta[name="api-base-url"]');
+        if (metaTag && metaTag.content) {
+            pushCandidate(metaTag.content);
+        }
+
+        pushCandidate(this.getDefaultApiBaseUrl());
+
+        try {
+            const { protocol, hostname, port, origin } = window.location;
+            const normalizedProtocol = protocol === 'https:' ? 'https:' : 'http:';
+
+            if (origin && origin !== 'null') {
+                pushCandidate(origin);
+            }
+
+            if (!hostname || protocol === 'file:') {
+                pushCandidate('http://127.0.0.1:8000');
+                pushCandidate('http://localhost:8000');
+            } else {
+                if (port && !['', '80', '443', '8000'].includes(port)) {
+                    pushCandidate(`${normalizedProtocol}//${hostname}:8000`);
+                }
+
+                if (!['localhost', '127.0.0.1', '::1'].includes(hostname)) {
+                    pushCandidate(`${normalizedProtocol}//localhost:8000`);
+                    pushCandidate(`${normalizedProtocol}//127.0.0.1:8000`);
+                }
+            }
+        } catch (error) {
+            console.warn('Failed to gather API base candidates', error);
+        }
+
+        // Remove duplicates while preserving order
+        return [...new Set(candidates.map(c => c.replace(/\/+$/, '')))]
+            .filter(Boolean);
+    }
+
+    async detectApiBaseUrl() {
+        const candidates = this.buildApiBaseCandidates();
+
+        if (candidates.length === 0) {
+            throw new Error('No API base URL candidates available');
+        }
+
+        for (const candidate of candidates) {
+            const base = candidate.replace(/\/+$/, '');
+            try {
+                const response = await fetch(`${base}/health`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-store'
+                });
+
+                if (response.ok) {
+                    return base;
+                }
+            } catch (error) {
+                console.warn('API base candidate unreachable', base, error);
+            }
+        }
+
+        throw new Error('Unable to reach any API base URL candidates');
+    }
+
+    async initializeApiBaseUrl() {
+        try {
+            const base = await this.detectApiBaseUrl();
+            this.apiBaseUrl = base;
+            return base;
+        } catch (error) {
+            console.error('Unable to detect API base URL, using fallback', error);
+            this.apiBaseUrl = this.apiBaseUrlFallback || this.getDefaultApiBaseUrl();
+            return this.apiBaseUrl;
+        }
+    }
+
+    async ensureApiBaseUrl() {
+        if (this.apiBaseUrl) {
+            return this.apiBaseUrl;
+        }
+
+        if (this.apiBaseUrlReady) {
+            try {
+                const resolved = await this.apiBaseUrlReady;
+                if (resolved) {
+                    this.apiBaseUrl = resolved;
+                    return resolved;
+                }
+            } catch (error) {
+                console.warn('API base detection failed, falling back', error);
+            }
+        }
+
+        this.apiBaseUrl = this.apiBaseUrlFallback || this.getDefaultApiBaseUrl();
+        return this.apiBaseUrl;
     }
 
     setupEventListeners() {
@@ -603,8 +753,13 @@ class ExcelProcessor {
             formData.append('raw_sheet3_name', settings.rawSheet3Name || '');
             formData.append('deal_column_name', settings.dealColumnName || 'N');
 
+            const apiBaseUrl = await this.ensureApiBaseUrl();
+            if (!apiBaseUrl) {
+                throw new Error('API backend is not reachable. Please ensure the server is running.');
+            }
+
             // Send to Python backend
-            const response = await fetch(`${this.apiBaseUrl}/process`, {
+            const response = await fetch(`${apiBaseUrl}/process`, {
                 method: 'POST',
                 body: formData
             });
@@ -637,11 +792,18 @@ class ExcelProcessor {
 }
 
 // Initialize the application when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    new ExcelProcessor();
-});
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('DOMContentLoaded', () => {
+        new ExcelProcessor();
+    });
+}
 
-    // ---- Mapping helpers ----
+// Expose the class for testing environments
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { ExcelProcessor };
+}
+
+// ---- Mapping helpers ----
 ExcelProcessor.prototype.initTheme = function() {
     const stored = localStorage.getItem('theme');
     let theme = stored;
