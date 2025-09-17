@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, Form
+from fastapi import FastAPI, UploadFile, Form, File
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,7 +40,12 @@ class ExcelProcessor:
         self.workbook = None
         self.lookup_tables = {}
 
-    def process_excel_file(self, file_data: bytes, settings: Dict[str, Any]) -> BytesIO:
+    def process_excel_file(
+        self,
+        file_data: bytes,
+        settings: Dict[str, Any],
+        existing_file_data: Optional[bytes] = None
+    ) -> BytesIO:
         """Main processing function that handles both steps and formatting"""
 
         # Load the input workbook
@@ -60,6 +65,10 @@ class ExcelProcessor:
 
         # Apply comprehensive Excel formatting
         self.apply_comprehensive_formatting(new_workbook, settings)
+
+        # Highlight differences against an existing formatted workbook if provided
+        if existing_file_data:
+            self.highlight_differences(new_workbook, existing_file_data, settings)
 
         # Save to BytesIO
         output = BytesIO()
@@ -399,6 +408,146 @@ class ExcelProcessor:
                     else:
                         cell.alignment = center_alignment
 
+    def highlight_differences(
+        self,
+        workbook: Workbook,
+        existing_file_data: bytes,
+        settings: Dict[str, Any]
+    ) -> None:
+        """Compare generated workbook with an existing formatted workbook and highlight deltas."""
+
+        try:
+            existing_wb = load_workbook(BytesIO(existing_file_data), data_only=True)
+        except Exception:
+            # If the formatted workbook cannot be read, skip highlighting
+            return
+
+        output_sheet_name = settings.get('output_sheet_name') or workbook.active.title
+
+        if output_sheet_name in existing_wb.sheetnames:
+            existing_ws = existing_wb[output_sheet_name]
+        else:
+            existing_ws = existing_wb.active
+
+        existing_rows = self.extract_existing_rows(existing_ws)
+        ws = workbook.active
+
+        seen_deals: Set[str] = set()
+
+        for row_idx in range(1, ws.max_row + 1):
+            row_values = [ws.cell(row=row_idx, column=col).value for col in range(1, 23)]
+            deal_key = self.normalize(row_values[1])
+
+            if not deal_key or deal_key == 'VSA DEAL':
+                continue
+
+            if deal_key in existing_rows:
+                existing_values = existing_rows[deal_key]
+                seen_deals.add(deal_key)
+
+                for col_idx in range(1, 23):
+                    new_value = row_values[col_idx - 1]
+                    old_value = existing_values[col_idx - 1]
+
+                    if self.values_differ(new_value, old_value):
+                        cell = ws.cell(row=row_idx, column=col_idx)
+                        self.mark_cell_red(cell)
+            else:
+                # Entire deal is new – mark populated cells
+                for col_idx in range(1, 23):
+                    cell = ws.cell(row=row_idx, column=col_idx)
+                    if not self.is_blank(cell.value):
+                        self.mark_cell_red(cell)
+
+        missing_deals = sorted(set(existing_rows.keys()) - seen_deals)
+
+        if missing_deals:
+            discrepancy_ws = workbook.create_sheet(title='Missing from Raw')
+            headers = ['VSA deal', 'Product', 'Qty BBL', 'Notes']
+            discrepancy_ws.append(headers)
+
+            header_font = Font(bold=True, size=12, name='Arial')
+            for col_idx in range(1, len(headers) + 1):
+                discrepancy_ws.cell(row=1, column=col_idx).font = header_font
+
+            for row_offset, deal in enumerate(missing_deals, start=2):
+                existing_values = existing_rows[deal]
+                product = existing_values[13] if len(existing_values) > 13 else None
+                qty = existing_values[15] if len(existing_values) > 15 else None
+
+                discrepancy_ws.cell(row=row_offset, column=1, value=existing_values[1])
+                discrepancy_ws.cell(row=row_offset, column=2, value=product)
+                discrepancy_ws.cell(row=row_offset, column=3, value=qty)
+                discrepancy_ws.cell(row=row_offset, column=4, value='Not present in latest raw data')
+
+                for col_idx in range(1, 4):
+                    cell = discrepancy_ws.cell(row=row_offset, column=col_idx)
+                    if not self.is_blank(cell.value):
+                        self.mark_cell_red(cell)
+
+            # Set simple column widths for readability
+            column_widths = [18, 18, 14, 40]
+            for idx, width in enumerate(column_widths, 1):
+                discrepancy_ws.column_dimensions[get_column_letter(idx)].width = width
+
+    def extract_existing_rows(self, worksheet) -> Dict[str, List[Any]]:
+        """Extract existing rows keyed by deal identifier from a formatted worksheet."""
+
+        data: Dict[str, List[Any]] = {}
+
+        for row_idx in range(2, worksheet.max_row + 1):
+            deal_value = worksheet.cell(row=row_idx, column=2).value
+
+            if self.is_blank(deal_value):
+                continue
+
+            deal_key = self.normalize(deal_value)
+
+            if not deal_key or deal_key == 'VSA DEAL':
+                continue
+
+            row_values = [worksheet.cell(row=row_idx, column=col).value for col in range(1, 23)]
+            data[deal_key] = row_values
+
+        return data
+
+    def is_blank(self, value) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, str) and value.strip() == '':
+            return True
+        return False
+
+    def values_differ(self, new_value, old_value) -> bool:
+        if self.is_blank(new_value) and self.is_blank(old_value):
+            return False
+
+        # Normalize dates
+        if isinstance(new_value, datetime):
+            new_value = new_value.strftime('%d/%m/%Y')
+        if isinstance(old_value, datetime):
+            old_value = old_value.strftime('%d/%m/%Y')
+
+        # Strip strings for comparison
+        if isinstance(new_value, str):
+            new_value = new_value.strip()
+        if isinstance(old_value, str):
+            old_value = old_value.strip()
+
+        # Compare numerics with tolerance
+        try:
+            new_float = float(new_value)
+            old_float = float(old_value)
+            return abs(new_float - old_float) > 0.0001
+        except (TypeError, ValueError):
+            return new_value != old_value
+
+    def mark_cell_red(self, cell) -> None:
+        """Apply a red font color to highlight changes without altering other attributes."""
+
+        font = cell.font or Font(name='Arial')
+        cell.font = font.copy(color='00FF0000')
+
     def normalize(self, value) -> str:
         """Normalize values for consistent comparison"""
         return str(value).strip().upper() if value else ''
@@ -443,6 +592,7 @@ class ExcelProcessor:
 @app.post("/process")
 async def process_excel(
     file: UploadFile,
+    existing_file: Optional[UploadFile] = File(None),
     output_sheet_name: str = Form("Q1-Q2-Q3-Q4-2024"),
     raw_sheet1_name: str = Form(""),
     raw_sheet2_name: str = Form(""),
@@ -464,9 +614,11 @@ async def process_excel(
             'deal_column_name': deal_column_name
         }
 
+        existing_data = await existing_file.read() if existing_file else None
+
         # Process the Excel file
         processor = ExcelProcessor()
-        output_buffer = processor.process_excel_file(file_data, settings)
+        output_buffer = processor.process_excel_file(file_data, settings, existing_data)
 
         # Return formatted Excel file
         headers = {

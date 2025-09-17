@@ -47,22 +47,49 @@
                     <p>Upload your petroleum trading data for analysis</p>
                 </div>
                 <div class="upload-area">
-                    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
-                    <label for="fileInput" class="upload-zone">
-                        <div class="upload-icon">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
-                            </svg>
+                    <div class="upload-grid">
+                        <div class="upload-group">
+                            <span class="upload-label">Raw data workbook</span>
+                            <input type="file" id="rawFileInput" accept=".xlsx,.xls" style="display: none;">
+                            <label for="rawFileInput" class="upload-zone">
+                                <div class="upload-icon">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                                    </svg>
+                                </div>
+                                <div class="upload-text">
+                                    <span class="upload-title">Upload raw Excel</span>
+                                    <span class="upload-subtitle">3-sheet source workbook</span>
+                                </div>
+                            </label>
+                            <div class="file-selected" id="rawFileInfo" style="display: none;">
+                                <div class="file-details">
+                                    <span id="rawFileName"></span>
+                                    <button id="clearRawFile" class="clear-btn" type="button">×</button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="upload-text">
-                            <span class="upload-title">Choose Excel File</span>
-                            <span class="upload-subtitle">Drag & drop or click to browse</span>
-                        </div>
-                    </label>
-                    <div class="file-selected" id="fileInfo" style="display: none;">
-                        <div class="file-details">
-                            <span id="fileName"></span>
-                            <button id="clearFile" class="clear-btn">×</button>
+
+                        <div class="upload-group">
+                            <span class="upload-label">Existing formatted workbook <span class="optional-tag">(optional)</span></span>
+                            <input type="file" id="formattedFileInput" accept=".xlsx,.xls" style="display: none;">
+                            <label for="formattedFileInput" class="upload-zone">
+                                <div class="upload-icon">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                                    </svg>
+                                </div>
+                                <div class="upload-text">
+                                    <span class="upload-title">Upload formatted Excel</span>
+                                    <span class="upload-subtitle">Compare & highlight differences</span>
+                                </div>
+                            </label>
+                            <div class="file-selected" id="formattedFileInfo" style="display: none;">
+                                <div class="file-details">
+                                    <span id="formattedFileName"></span>
+                                    <button id="clearFormattedFile" class="clear-btn" type="button">×</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

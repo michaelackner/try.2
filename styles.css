@@ -224,6 +224,34 @@ body, .dashboard, .dashboard-main, .dashboard-header {
     margin-bottom: var(--space-xl);
 }
 
+.upload-grid {
+    display: grid;
+    gap: var(--space-lg);
+}
+
+@media (min-width: 900px) {
+    .upload-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.upload-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.upload-label {
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
+.optional-tag {
+    font-weight: 500;
+    color: var(--gray-500);
+    font-size: 0.85rem;
+}
+
 .upload-zone {
     display: flex;
     flex-direction: column;
