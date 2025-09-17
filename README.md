@@ -105,11 +105,11 @@ The Excel file must contain 3 sheets:
 - Applies Excel formatting (borders, fonts, column widths)
 
 ### Step 2: Business Rules
-1. **MIDLANDS Product**: Sets columns E-K to 0 and locks them
-2. **WHB+CIF Deals**: Sets insurance columns I,J to 0 and locks them
-3. **LC Costs**: Populates column E with BOT+BLC cost totals
-4. **CIN Insurance**: Populates column I with CIN costs
-5. **CLI Insurance**: Populates column J with CLI costs
+1. **WHB+CIF Deals**: Sets insurance columns I,J to 0 and locks them
+2. **LC Costs**: Populates column E with BOT+BLC cost totals
+3. **CIN Insurance**: Populates column I with CIN costs
+4. **CLI Insurance**: Populates column J with CLI costs
+5. **Load Inspection**: Populates column F with INS/INQ/INA cost totals
 6. **TOTAL Formula**: Column L = SUM(E:K)
 7. **VSA Comments**: Populates column U from hedge lookup
 8. **Additional Information**: Populates column V from hedge lookup

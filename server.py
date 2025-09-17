@@ -209,13 +209,7 @@ class ExcelProcessor:
             product = self.normalize(row_values[13]) # Product (N)
             hedge = self.normalize(row_values[14])   # Hedge (O)
 
-            # Rule 1: MIDLANDS product - set columns E-K to 0 and lock
-            if product == 'MIDLANDS':
-                for col in range(5, 12):  # E-K (columns 5-11)
-                    ws.cell(row=row_idx, column=col, value=0)
-                    locks.add(f"{row_idx},{col}")
-
-            # Rule 2: WHB+CIF deals - set insurance columns I,J to 0 and lock
+            # Rule 1: WHB+CIF deals - set insurance columns I,J to 0 and lock
             if deal and deal in self.lookup_tables.get('whb_cif_deals', set()):
                 if f"{row_idx},9" not in locks:  # Column I (index 9)
                     ws.cell(row=row_idx, column=9, value=0)
@@ -224,7 +218,7 @@ class ExcelProcessor:
                     ws.cell(row=row_idx, column=10, value=0)
                     locks.add(f"{row_idx},10")
 
-            # Rule 3: LC Costs (E) - BOT + BLC totals
+            # Rule 2: LC Costs (E) - BOT + BLC totals
             if f"{row_idx},5" not in locks and ws.cell(row=row_idx, column=5).value != 0:
                 bot_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},BOT", 0)
                 blc_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},BLC", 0)
@@ -232,19 +226,19 @@ class ExcelProcessor:
                 if total_cost != 0:
                     ws.cell(row=row_idx, column=5, value=total_cost)
 
-            # Rule 4: CIN insurance (I) - CIN costs
+            # Rule 3: CIN insurance (I) - CIN costs
             if f"{row_idx},9" not in locks and ws.cell(row=row_idx, column=9).value != 0:
                 cin_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},CIN", 0)
                 if cin_cost != 0:
                     ws.cell(row=row_idx, column=9, value=cin_cost)
 
-            # Rule 5: CLI insurance (J) - CLI costs
+            # Rule 4: CLI insurance (J) - CLI costs
             if f"{row_idx},10" not in locks and ws.cell(row=row_idx, column=10).value != 0:
                 cli_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},CLI", 0)
                 if cli_cost != 0:
                     ws.cell(row=row_idx, column=10, value=cli_cost)
 
-            # Rule 9: INS/INQ/INA insurance (F) - Load inspection costs
+            # Rule 5: INS/INQ/INA insurance (F) - Load inspection costs
             if f"{row_idx},6" not in locks and ws.cell(row=row_idx, column=6).value != 0:
                 ins_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},INS", 0)
                 inq_cost = self.lookup_tables.get('costs_map', {}).get(f"{deal},INQ", 0)
