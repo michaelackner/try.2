@@ -321,9 +321,18 @@ body, .dashboard, .dashboard-main, .dashboard-header {
     border: 1px solid var(--gray-300);
     border-radius: var(--radius-md);
     padding: var(--space-sm) var(--space-md);
-    color: var(--gray-900);
+    color: #000000;
+    caret-color: #000000;
     font-size: 0.95rem;
     transition: border-color 0.2s ease;
+}
+
+.config-grid input:focus,
+.config-grid input:active,
+.config-grid input:valid,
+.config-grid input:invalid {
+    color: #000000;
+    caret-color: #000000;
 }
 
 .config-grid input:focus {
