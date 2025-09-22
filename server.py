@@ -11,6 +11,8 @@ from openpyxl.utils import get_column_letter, column_index_from_string
 from typing import Dict, Any, List, Set, Optional
 from numbers import Number
 
+from comparison import DealComparisonAnalyzer
+
 app = FastAPI(title="VARO REBILLING Excel Processor", version="1.0.0")
 
 # Add CORS middleware for local development
@@ -698,6 +700,10 @@ class ExcelProcessor:
 
         return None
 
+
+comparison_analyzer = DealComparisonAnalyzer()
+
+
 @app.post("/process")
 async def process_excel(
     file: UploadFile,
@@ -742,6 +748,66 @@ async def process_excel(
 
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.post("/compare-deals")
+async def compare_deals(
+    formatted_file: UploadFile = File(...),
+    comparison_file: UploadFile = File(...),
+    formatted_sheet: str = Form(""),
+    comparison_sheet: str = Form(""),
+    formatted_quantity_letter: str = Form("L"),
+    comparison_quantity_column: str = Form(""),
+):
+    """Analyze two formatted workbooks and return discrepancy insights."""
+
+    try:
+        formatted_bytes = await formatted_file.read()
+        comparison_bytes = await comparison_file.read()
+
+        result = comparison_analyzer.analyze(
+            formatted_bytes,
+            comparison_bytes,
+            formatted_sheet=formatted_sheet or None,
+            comparison_sheet=comparison_sheet or None,
+            formatted_quantity_letter=formatted_quantity_letter or "L",
+            comparison_quantity_column=comparison_quantity_column or None,
+        )
+        return JSONResponse(result)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    except KeyError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=404)
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.get("/compare-deals/export/{export_type}")
+async def export_comparison(export_type: str, token: str):
+    """Export cached comparison insights in multiple formats."""
+
+    try:
+        if export_type == "excel":
+            data = comparison_analyzer.generate_excel(token)
+            filename = "deal_comparison.xlsx"
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        elif export_type == "csv":
+            data = comparison_analyzer.generate_csv(token)
+            filename = "deal_comparison.csv"
+            media_type = "text/csv"
+        elif export_type == "pdf":
+            data = comparison_analyzer.generate_pdf(token)
+            filename = "deal_comparison_summary.pdf"
+            media_type = "application/pdf"
+        else:
+            return JSONResponse({"error": "Unsupported export type"}, status_code=400)
+
+        headers = {"Content-Disposition": f"attachment; filename={filename}"}
+        return StreamingResponse(BytesIO(data), media_type=media_type, headers=headers)
+    except KeyError:
+        return JSONResponse({"error": "Invalid or expired export token"}, status_code=404)
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 @app.get("/health")
 async def health_check():

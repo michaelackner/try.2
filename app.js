@@ -779,9 +779,809 @@ class ExcelProcessor {
     // xlsx-js-style loader removed - formatting handled by Python backend
 }
 
+// Deal comparison dashboard module
+class DealComparisonDashboard {
+    constructor(processor) {
+        this.processor = processor;
+        this.apiBaseUrl = null;
+        this.apiReady = this.initializeApi();
+
+        this.formattedFile = null;
+        this.referenceFile = null;
+        this.analysisToken = null;
+        this.analysisData = null;
+        this.charts = {
+            variance: null,
+            waterfall: null,
+            heatmap: null,
+            treemap: null
+        };
+        this.filters = {
+            deals: new Set(),
+            costTypes: new Set()
+        };
+
+        this.elements = this.cacheElements();
+        this.bindEvents();
+    }
+
+    async initializeApi() {
+        try {
+            this.apiBaseUrl = await this.processor.ensureApiBaseUrl();
+        } catch (error) {
+            console.warn('Comparison module using fallback API base URL', error);
+            this.apiBaseUrl = this.processor.apiBaseUrl || 'http://127.0.0.1:8000';
+        }
+        return this.apiBaseUrl;
+    }
+
+    cacheElements() {
+        return {
+            module: document.getElementById('comparisonModule'),
+            formattedInput: document.getElementById('comparisonFormattedInput'),
+            formattedInfo: document.getElementById('comparisonFormattedInfo'),
+            formattedName: document.getElementById('comparisonFormattedName'),
+            clearFormatted: document.getElementById('clearComparisonFormatted'),
+            referenceInput: document.getElementById('comparisonReferenceInput'),
+            referenceInfo: document.getElementById('comparisonReferenceInfo'),
+            referenceName: document.getElementById('comparisonReferenceName'),
+            clearReference: document.getElementById('clearComparisonReference'),
+            compareButton: document.getElementById('compareButton'),
+            loading: document.getElementById('comparisonLoading'),
+            errorCard: document.getElementById('comparisonError'),
+            errorMessage: document.getElementById('comparisonErrorMessage'),
+            formattedSheet: document.getElementById('comparisonFormattedSheet'),
+            referenceSheet: document.getElementById('comparisonReferenceSheet'),
+            quantityColumn: document.getElementById('comparisonQuantityColumn'),
+            formattedLetter: document.getElementById('comparisonFormattedLetter'),
+            results: document.getElementById('comparisonResults'),
+            kpiDeals: document.getElementById('kpiDeals'),
+            kpiDifference: document.getElementById('kpiDifference'),
+            kpiAverageVariance: document.getElementById('kpiAverageVariance'),
+            kpiUnregistered: document.getElementById('kpiUnregistered'),
+            filters: document.getElementById('comparisonFilters'),
+            headline: document.getElementById('comparisonHeadline'),
+            topDeals: document.getElementById('comparisonTopDeals'),
+            costSummary: document.getElementById('comparisonCostSummary'),
+            recommendations: document.getElementById('comparisonRecommendations'),
+            anomalies: document.getElementById('comparisonAnomalies'),
+            patterns: document.getElementById('comparisonPatterns'),
+            exportButtons: document.querySelectorAll('.export-actions [data-export]'),
+            varianceChart: document.getElementById('dealVarianceChart'),
+            waterfallChart: document.getElementById('costWaterfallChart'),
+            treemapChart: document.getElementById('unregisteredTreemap'),
+            heatmapChart: document.getElementById('costHeatmap')
+        };
+    }
+
+    bindEvents() {
+        const el = this.elements;
+        if (!el.module) {
+            return;
+        }
+
+        const handleFile = (input, type) => {
+            const file = input.files && input.files[0] ? input.files[0] : null;
+            if (type === 'formatted') {
+                this.formattedFile = file;
+                if (file && el.formattedName) {
+                    el.formattedName.textContent = `${file.name} (${this.formatSize(file.size)})`;
+                }
+                if (el.formattedInfo) {
+                    el.formattedInfo.style.display = file ? 'block' : 'none';
+                }
+            } else {
+                this.referenceFile = file;
+                if (file && el.referenceName) {
+                    el.referenceName.textContent = `${file.name} (${this.formatSize(file.size)})`;
+                }
+                if (el.referenceInfo) {
+                    el.referenceInfo.style.display = file ? 'block' : 'none';
+                }
+            }
+            this.updateActionState();
+        };
+
+        if (el.formattedInput) {
+            el.formattedInput.addEventListener('change', () => handleFile(el.formattedInput, 'formatted'));
+        }
+        if (el.referenceInput) {
+            el.referenceInput.addEventListener('change', () => handleFile(el.referenceInput, 'reference'));
+        }
+        if (el.clearFormatted) {
+            el.clearFormatted.addEventListener('click', () => {
+                if (el.formattedInput) {
+                    el.formattedInput.value = '';
+                }
+                this.formattedFile = null;
+                if (el.formattedInfo) {
+                    el.formattedInfo.style.display = 'none';
+                }
+                this.updateActionState();
+            });
+        }
+        if (el.clearReference) {
+            el.clearReference.addEventListener('click', () => {
+                if (el.referenceInput) {
+                    el.referenceInput.value = '';
+                }
+                this.referenceFile = null;
+                if (el.referenceInfo) {
+                    el.referenceInfo.style.display = 'none';
+                }
+                this.updateActionState();
+            });
+        }
+        if (el.compareButton) {
+            el.compareButton.addEventListener('click', () => this.analyze());
+        }
+
+        if (el.exportButtons && el.exportButtons.length) {
+            el.exportButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const type = button.getAttribute('data-export');
+                    this.downloadExport(type);
+                });
+            });
+        }
+    }
+
+    updateActionState() {
+        if (!this.elements.compareButton) return;
+        const ready = Boolean(this.formattedFile && this.referenceFile);
+        this.elements.compareButton.disabled = !ready;
+    }
+
+    setLoading(isLoading) {
+        if (!this.elements.compareButton || !this.elements.loading) return;
+        this.elements.compareButton.disabled = isLoading || !this.formattedFile || !this.referenceFile;
+        this.elements.loading.style.display = isLoading ? 'flex' : 'none';
+    }
+
+    clearError() {
+        if (this.elements.errorCard) {
+            this.elements.errorCard.style.display = 'none';
+        }
+    }
+
+    showError(message) {
+        if (this.elements.errorCard && this.elements.errorMessage) {
+            this.elements.errorMessage.textContent = message;
+            this.elements.errorCard.style.display = 'block';
+        }
+    }
+
+    async analyze() {
+        if (!this.formattedFile || !this.referenceFile) {
+            return;
+        }
+        await this.apiReady;
+        this.clearError();
+        this.setLoading(true);
+
+        const formData = new FormData();
+        formData.append('formatted_file', this.formattedFile);
+        formData.append('comparison_file', this.referenceFile);
+        if (this.elements.formattedSheet && this.elements.formattedSheet.value) {
+            formData.append('formatted_sheet', this.elements.formattedSheet.value);
+        }
+        if (this.elements.referenceSheet && this.elements.referenceSheet.value) {
+            formData.append('comparison_sheet', this.elements.referenceSheet.value);
+        }
+        if (this.elements.quantityColumn && this.elements.quantityColumn.value) {
+            formData.append('comparison_quantity_column', this.elements.quantityColumn.value);
+        }
+        if (this.elements.formattedLetter && this.elements.formattedLetter.value) {
+            formData.append('formatted_quantity_letter', this.elements.formattedLetter.value);
+        }
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/compare-deals`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: 'Comparison failed' }));
+                throw new Error(error.error || 'Comparison failed');
+            }
+
+            const data = await response.json();
+            this.analysisData = data;
+            this.analysisToken = data.token || null;
+            this.filters.deals.clear();
+            this.filters.costTypes.clear();
+            this.renderResults();
+        } catch (error) {
+            console.error('Comparison analysis failed', error);
+            this.showError(error.message || 'Comparison analysis failed');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+
+    renderResults() {
+        if (!this.analysisData || !this.elements.results) {
+            return;
+        }
+        this.elements.results.style.display = 'flex';
+        this.renderKpis();
+        this.updateFiltersUI();
+        this.renderInsights();
+        this.renderCharts();
+    }
+
+    renderKpis() {
+        const overview = this.analysisData?.overview || {};
+        if (this.elements.kpiDeals) {
+            this.elements.kpiDeals.textContent = this.formatNumber(overview.total_deals || 0);
+        }
+        if (this.elements.kpiDifference) {
+            this.elements.kpiDifference.textContent = this.formatCurrency(overview.total_difference || 0);
+        }
+        if (this.elements.kpiAverageVariance) {
+            const value = typeof overview.average_variance === 'number' ? overview.average_variance : 0;
+            this.elements.kpiAverageVariance.textContent = `${value.toFixed(2)}%`;
+        }
+        if (this.elements.kpiUnregistered) {
+            this.elements.kpiUnregistered.textContent = this.formatNumber(overview.unregistered_cost_types || 0);
+        }
+    }
+
+    renderInsights() {
+        const summary = this.analysisData?.summary_report;
+        if (!summary) return;
+        if (this.elements.headline) {
+            this.elements.headline.textContent = summary.headline || '';
+        }
+        if (this.elements.topDeals) {
+            this.elements.topDeals.textContent = summary.top_contributors || '';
+        }
+        if (this.elements.costSummary) {
+            this.elements.costSummary.textContent = summary.unregistered_costs || '';
+        }
+
+        if (this.elements.recommendations) {
+            this.elements.recommendations.innerHTML = '';
+            (summary.recommended_actions || []).forEach((action) => {
+                const li = document.createElement('li');
+                li.textContent = action;
+                this.elements.recommendations.appendChild(li);
+            });
+        }
+
+        if (this.elements.anomalies) {
+            this.elements.anomalies.innerHTML = '';
+            const anomalies = this.analysisData?.anomalies || [];
+            if (!anomalies.length) {
+                const li = document.createElement('li');
+                li.textContent = 'No anomaly-level deal variances detected.';
+                this.elements.anomalies.appendChild(li);
+            } else {
+                anomalies.forEach((item) => {
+                    const li = document.createElement('li');
+                    li.textContent = `${item.deal_id}: difference ${this.formatCurrency(item.difference)} (${this.formatCurrency(item.comparison_quantity)} → ${this.formatCurrency(item.formatted_quantity)})`;
+                    li.dataset.deal = item.deal_id;
+                    li.addEventListener('click', () => this.toggleDealFilter(item.deal_id));
+                    this.elements.anomalies.appendChild(li);
+                });
+            }
+        }
+
+        if (this.elements.patterns) {
+            this.elements.patterns.innerHTML = '';
+            const patterns = this.analysisData?.patterns || {};
+            const statusCounts = patterns.status_counts || {};
+            const statusSummary = `Registered: ${this.formatNumber(statusCounts.Registered || 0)}, Partial: ${this.formatNumber(statusCounts.Partial || 0)}, Unregistered: ${this.formatNumber(statusCounts.Unregistered || 0)}`;
+            const statusLi = document.createElement('li');
+            statusLi.textContent = `Deal registry status mix — ${statusSummary}`;
+            this.elements.patterns.appendChild(statusLi);
+
+            (patterns.repeating_patterns || []).forEach((pattern) => {
+                const li = document.createElement('li');
+                li.textContent = `${pattern.cost_types.join(', ')} missing for deals ${pattern.deals.join(', ')}`;
+                li.dataset.cost = pattern.cost_types[0];
+                li.addEventListener('click', () => {
+                    pattern.cost_types.forEach((cost) => this.toggleCostFilter(cost));
+                });
+                this.elements.patterns.appendChild(li);
+            });
+        }
+    }
+
+    renderCharts() {
+        const filtered = this.getFilteredDeals();
+        this.renderVarianceChart(filtered);
+        this.renderWaterfallChart(filtered);
+        this.renderTreemap(filtered);
+        this.renderHeatmap();
+    }
+
+    renderVarianceChart(filteredDeals) {
+        if (!this.elements.varianceChart) return;
+        const container = this.elements.varianceChart;
+        if (!filteredDeals.length) {
+            container.innerHTML = '<div class="empty-state">No qualifying deals for selection.</div>';
+            return;
+        }
+        const topDeals = filteredDeals.slice().sort((a, b) => b.difference - a.difference).slice(0, 20);
+        const labels = topDeals.map((deal) => deal.deal_id);
+        const formatted = topDeals.map((deal) => deal.formatted_quantity);
+        const comparison = topDeals.map((deal) => deal.comparison_quantity);
+        const difference = topDeals.map((deal) => Math.max(deal.difference, 0));
+
+        const traces = [
+            {
+                type: 'bar',
+                name: 'Comparison',
+                orientation: 'h',
+                x: comparison,
+                y: labels,
+                marker: { color: '#9ca3af' },
+                hovertemplate: 'Deal %{y}<br>Comparison: %{x:$,.2f}<extra></extra>'
+            },
+            {
+                type: 'bar',
+                name: 'Formatted',
+                orientation: 'h',
+                x: formatted,
+                y: labels,
+                marker: { color: '#2563eb', opacity: 0.55 },
+                hovertemplate: 'Deal %{y}<br>Formatted: %{x:$,.2f}<extra></extra>'
+            },
+            {
+                type: 'bar',
+                name: 'Difference',
+                orientation: 'h',
+                x: difference,
+                y: labels,
+                base: comparison,
+                marker: { color: '#ef4444' },
+                hovertemplate: 'Deal %{y}<br>Difference: %{x:$,.2f}<extra></extra>'
+            }
+        ];
+
+        const layout = {
+            barmode: 'overlay',
+            hovermode: 'closest',
+            margin: { l: 140, r: 30, t: 20, b: 40 },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            xaxis: {
+                title: 'Total USD',
+                tickprefix: '$',
+                hoverformat: '$,.2f',
+                zeroline: false,
+                automargin: true
+            },
+            yaxis: {
+                automargin: true
+            },
+            legend: {
+                orientation: 'h',
+                y: -0.25
+            }
+        };
+
+        Plotly.react(container, traces, layout, { displayModeBar: false, responsive: true });
+        container.on('plotly_click', (event) => {
+            if (!event || !event.points || !event.points[0]) return;
+            const dealId = event.points[0].y;
+            this.toggleDealFilter(dealId);
+        });
+        container.on('plotly_doubleclick', () => this.resetFilters());
+    }
+
+    renderWaterfallChart(filteredDeals) {
+        if (!this.elements.waterfallChart) return;
+        const container = this.elements.waterfallChart;
+        if (!filteredDeals.length) {
+            container.innerHTML = '<div class="empty-state">No cost differences available.</div>';
+            return;
+        }
+
+        const breakdown = this.aggregateCostBreakdown(filteredDeals);
+        const labels = ['Comparison Total'];
+        const measures = ['absolute'];
+        const values = [breakdown.comparisonTotal];
+        const text = [this.formatCurrency(breakdown.comparisonTotal)];
+        const colors = ['#1e3a8a'];
+
+        breakdown.costs.forEach((cost) => {
+            labels.push(cost.cost_type);
+            measures.push('relative');
+            values.push(cost.difference);
+            text.push(this.formatCurrency(cost.difference));
+            if (cost.status === 'Unregistered') {
+                colors.push('#fb923c');
+            } else if (cost.difference >= 0) {
+                colors.push('#ef4444');
+            } else {
+                colors.push('#10b981');
+            }
+        });
+
+        labels.push('Formatted Total');
+        measures.push('total');
+        values.push(breakdown.formattedTotal);
+        text.push(this.formatCurrency(breakdown.formattedTotal));
+        colors.push('#1e40af');
+
+        const trace = {
+            type: 'waterfall',
+            orientation: 'v',
+            measure: measures,
+            x: labels,
+            text: text,
+            textposition: 'outside',
+            y: values,
+            connector: { line: { color: '#94a3b8' } },
+            decreasing: { marker: { color: '#10b981' } },
+            increasing: { marker: { color: '#ef4444' } },
+            totals: { marker: { color: '#1e3a8a' } },
+            marker: { color: colors },
+            hovertemplate: '%{x}<br>%{y:$,.2f}<extra></extra>'
+        };
+
+        const layout = {
+            margin: { t: 20, l: 60, r: 30, b: 60 },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            yaxis: {
+                title: 'USD',
+                tickprefix: '$',
+                hoverformat: '$,.2f'
+            }
+        };
+
+        Plotly.react(container, [trace], layout, { displayModeBar: false, responsive: true });
+        container.on('plotly_click', (event) => {
+            if (!event || !event.points || !event.points[0]) return;
+            const label = event.points[0].x;
+            if (label && label !== 'Comparison Total' && label !== 'Formatted Total') {
+                this.toggleCostFilter(label);
+            }
+        });
+        container.on('plotly_doubleclick', () => this.resetFilters());
+    }
+
+    renderTreemap(filteredDeals) {
+        if (!this.elements.treemapChart) return;
+        const container = this.elements.treemapChart;
+        const unregistered = this.aggregateUnregistered(filteredDeals);
+        if (!unregistered.length) {
+            container.innerHTML = '<div class="empty-state">No unregistered costs detected.</div>';
+            return;
+        }
+
+        const totalImpact = unregistered.reduce((sum, item) => sum + item.impact, 0);
+        const labels = ['Unregistered Costs', ...unregistered.map((item) => item.cost_type)];
+        const parents = ['', ...unregistered.map(() => 'Unregistered Costs')];
+        const values = [totalImpact, ...unregistered.map((item) => item.impact)];
+        const colors = [0, ...unregistered.map((item) => item.deal_count)];
+        const text = ['Total', ...unregistered.map((item) => `${item.deal_count} deals`)].map((info, idx) => `${labels[idx]}<br>${info}`);
+
+        const trace = {
+            type: 'treemap',
+            labels,
+            parents,
+            values,
+            textinfo: 'label+value',
+            hovertemplate: '<b>%{label}</b><br>Impact: %{value:$,.2f}<extra>%{customdata}</extra>',
+            customdata: ['Overall', ...unregistered.map((item) => `${item.deal_count} deals`)],
+            marker: {
+                colors,
+                colorscale: 'YlOrRd'
+            }
+        };
+
+        const layout = {
+            margin: { t: 20, l: 20, r: 20, b: 20 },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)'
+        };
+
+        Plotly.react(container, [trace], layout, { displayModeBar: false, responsive: true });
+        container.on('plotly_click', (event) => {
+            if (!event || !event.points || !event.points[0]) return;
+            const label = event.points[0].label;
+            if (label && label !== 'Unregistered Costs') {
+                this.toggleCostFilter(label);
+            }
+        });
+        container.on('plotly_doubleclick', () => this.resetFilters());
+    }
+
+    renderHeatmap() {
+        if (!this.elements.heatmapChart || !this.analysisData?.heatmap) return;
+        const container = this.elements.heatmapChart;
+        const data = this.analysisData.heatmap;
+        const dealFilter = this.filters.deals;
+        const costFilter = this.filters.costTypes;
+
+        const selectedDeals = data.deal_ids.filter((deal) => !dealFilter.size || dealFilter.has(deal));
+        const selectedCosts = data.cost_types.filter((cost) => !costFilter.size || costFilter.has(cost));
+
+        if (!selectedDeals.length || !selectedCosts.length) {
+            container.innerHTML = '<div class="empty-state">No matrix values for current selection.</div>';
+            return;
+        }
+
+        const dealIndex = new Map(data.deal_ids.map((deal, index) => [deal, index]));
+        const costIndex = new Map(data.cost_types.map((cost, index) => [cost, index]));
+
+        const matrix = selectedDeals.map((deal) => {
+            const rowIndex = dealIndex.get(deal);
+            return selectedCosts.map((cost) => data.matrix[rowIndex][costIndex.get(cost)]);
+        });
+
+        const statusMatrix = selectedDeals.map((deal) => {
+            const rowIndex = dealIndex.get(deal);
+            return selectedCosts.map((cost) => data.status_matrix[rowIndex][costIndex.get(cost)]);
+        });
+
+        const hover = selectedDeals.map((deal) => {
+            const rowIndex = dealIndex.get(deal);
+            return selectedCosts.map((cost) => data.hover[rowIndex][costIndex.get(cost)]);
+        });
+
+        const colorscale = [
+            [0.0, '#9ca3af'],
+            [0.25, '#1e3a8a'],
+            [0.35, '#60a5fa'],
+            [0.5, '#ffffff'],
+            [0.75, '#fca5a5'],
+            [1.0, '#b91c1c']
+        ];
+
+        const trace = {
+            type: 'heatmap',
+            x: selectedCosts,
+            y: selectedDeals,
+            z: matrix,
+            text: statusMatrix,
+            hoverinfo: 'text',
+            hovertext: hover,
+            colorscale,
+            zmin: -10,
+            zmax: 2,
+            showscale: false
+        };
+
+        const layout = {
+            margin: { t: 30, l: 140, r: 20, b: 80 },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            xaxis: {
+                tickangle: -45,
+                automargin: true
+            },
+            yaxis: {
+                automargin: true
+            }
+        };
+
+        Plotly.react(container, [trace], layout, { displayModeBar: false, responsive: true });
+        container.on('plotly_click', (event) => {
+            if (!event || !event.points || !event.points[0]) return;
+            const point = event.points[0];
+            const dealId = point.y;
+            const costType = point.x;
+            if (dealId) {
+                this.toggleDealFilter(dealId);
+            }
+            if (costType) {
+                this.toggleCostFilter(costType);
+            }
+        });
+        container.on('plotly_doubleclick', () => this.resetFilters());
+    }
+
+    aggregateCostBreakdown(deals) {
+        const breakdownMap = new Map();
+        let comparisonTotal = 0;
+        let formattedTotal = 0;
+
+        deals.forEach((deal) => {
+            comparisonTotal += deal.comparison_quantity || 0;
+            formattedTotal += deal.formatted_quantity || 0;
+            (deal.costs || []).forEach((cost) => {
+                const current = breakdownMap.get(cost.cost_type) || {
+                    cost_type: cost.cost_type,
+                    formatted_total: 0,
+                    comparison_total: 0,
+                    difference: 0,
+                    status: 'Registered'
+                };
+                current.formatted_total += cost.formatted || 0;
+                current.comparison_total += cost.comparison || 0;
+                current.difference += cost.difference || 0;
+                if (cost.status === 'Unregistered') {
+                    current.status = 'Unregistered';
+                } else if (cost.status === 'Partial' && current.status !== 'Unregistered') {
+                    current.status = 'Partial';
+                }
+                breakdownMap.set(cost.cost_type, current);
+            });
+        });
+
+        const costs = Array.from(breakdownMap.values()).sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference));
+        return { costs, comparisonTotal, formattedTotal };
+    }
+
+    aggregateUnregistered(deals) {
+        const registry = new Map();
+        deals.forEach((deal) => {
+            (deal.costs || []).forEach((cost) => {
+                if (cost.status === 'Unregistered') {
+                    const current = registry.get(cost.cost_type) || { cost_type: cost.cost_type, impact: 0, deal_count: 0, deals: new Set() };
+                    current.impact += Math.abs(cost.difference || 0);
+                    current.deals.add(deal.deal_id);
+                    current.deal_count = current.deals.size;
+                    registry.set(cost.cost_type, current);
+                }
+            });
+        });
+        return Array.from(registry.values()).map((item) => ({
+            cost_type: item.cost_type,
+            impact: item.impact,
+            deal_count: item.deal_count,
+            deals: Array.from(item.deals)
+        })).sort((a, b) => b.impact - a.impact);
+    }
+
+    getFilteredDeals() {
+        if (!this.analysisData?.deals) {
+            return [];
+        }
+        const deals = this.analysisData.deals.map((deal) => ({ ...deal, costs: (deal.costs || []).map((cost) => ({ ...cost })) }));
+        let filtered = deals;
+        if (this.filters.deals.size) {
+            filtered = filtered.filter((deal) => this.filters.deals.has(deal.deal_id));
+        }
+        if (this.filters.costTypes.size) {
+            filtered = filtered
+                .map((deal) => ({
+                    ...deal,
+                    costs: deal.costs.filter((cost) => this.filters.costTypes.has(cost.cost_type))
+                }))
+                .filter((deal) => deal.costs.length > 0);
+        }
+        return filtered;
+    }
+
+    updateFiltersUI() {
+        if (!this.elements.filters) return;
+        const container = this.elements.filters;
+        container.innerHTML = '';
+
+        const hasFilters = this.filters.deals.size || this.filters.costTypes.size;
+        if (!hasFilters) {
+            const placeholder = document.createElement('span');
+            placeholder.textContent = 'Click on any chart element to drill down.';
+            placeholder.style.color = 'var(--gray-500)';
+            container.appendChild(placeholder);
+            return;
+        }
+
+        const createChip = (label, type) => {
+            const chip = document.createElement('span');
+            chip.className = 'filter-chip';
+            chip.textContent = label;
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.textContent = '×';
+            remove.addEventListener('click', () => {
+                if (type === 'deal') {
+                    this.filters.deals.delete(label);
+                } else {
+                    this.filters.costTypes.delete(label);
+                }
+                this.refresh();
+            });
+            chip.appendChild(remove);
+            return chip;
+        };
+
+        this.filters.deals.forEach((deal) => container.appendChild(createChip(deal, 'deal')));
+        this.filters.costTypes.forEach((cost) => container.appendChild(createChip(cost, 'cost')));
+
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.className = 'btn ghost';
+        reset.textContent = 'Clear filters';
+        reset.addEventListener('click', () => this.resetFilters());
+        container.appendChild(reset);
+    }
+
+    refresh() {
+        this.updateFiltersUI();
+        this.renderCharts();
+    }
+
+    resetFilters() {
+        this.filters.deals.clear();
+        this.filters.costTypes.clear();
+        this.refresh();
+    }
+
+    toggleDealFilter(dealId) {
+        if (!dealId) return;
+        if (this.filters.deals.has(dealId)) {
+            this.filters.deals.delete(dealId);
+        } else {
+            this.filters.deals.add(dealId);
+        }
+        this.refresh();
+    }
+
+    toggleCostFilter(costType) {
+        if (!costType) return;
+        if (this.filters.costTypes.has(costType)) {
+            this.filters.costTypes.delete(costType);
+        } else {
+            this.filters.costTypes.add(costType);
+        }
+        this.refresh();
+    }
+
+    async downloadExport(exportType) {
+        if (!exportType || !this.analysisToken) {
+            return;
+        }
+        await this.apiReady;
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/compare-deals/export/${exportType}?token=${this.analysisToken}`);
+            if (!response.ok) {
+                throw new Error('Unable to export comparison report');
+            }
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const filenames = {
+                excel: 'deal_comparison.xlsx',
+                csv: 'deal_comparison.csv',
+                pdf: 'deal_comparison_summary.pdf'
+            };
+            a.href = url;
+            a.download = filenames[exportType] || 'comparison_export';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Export failed', error);
+            this.showError(error.message || 'Export failed');
+        }
+    }
+
+    formatCurrency(value) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value || 0);
+    }
+
+    formatNumber(value) {
+        return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value || 0);
+    }
+
+    formatSize(bytes) {
+        if (!bytes && bytes !== 0) return '';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let size = bytes;
+        let unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex += 1;
+        }
+        return `${size.toFixed(1)} ${units[unitIndex]}`;
+    }
+}
+
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new ExcelProcessor();
+    const processor = new ExcelProcessor();
+    processor.ensureApiBaseUrl().finally(() => {
+        new DealComparisonDashboard(processor);
+    });
 });
 
 // ---- Mapping helpers ----
