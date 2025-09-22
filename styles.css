@@ -805,6 +805,260 @@ body, .dashboard, .dashboard-main, .dashboard-header {
     min-width: 100px;
 }
 
+/* Comparison Module */
+.comparison-card {
+    margin-top: var(--space-xl);
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-xl);
+    padding: var(--space-2xl);
+    box-shadow: var(--shadow-lg);
+}
+
+.comparison-upload-grid {
+    display: grid;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+}
+
+@media (min-width: 900px) {
+    .comparison-upload-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.comparison-upload .upload-zone.compact {
+    padding: var(--space-lg);
+    min-height: 140px;
+}
+
+.comparison-settings {
+    margin-bottom: var(--space-lg);
+    border: 1px dashed var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--gray-50);
+}
+
+.comparison-settings summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--primary-blue);
+}
+
+.comparison-settings-grid {
+    margin-top: var(--space-md);
+    display: grid;
+    gap: var(--space-md);
+}
+
+@media (min-width: 720px) {
+    .comparison-settings-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.comparison-settings-grid input {
+    padding: var(--space-sm);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+}
+
+.comparison-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.error-card.compact {
+    margin-bottom: var(--space-lg);
+    padding: var(--space-sm) var(--space-md);
+}
+
+.comparison-results {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+}
+
+.comparison-top-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+.comparison-kpis {
+    display: grid;
+    gap: var(--space-md);
+}
+
+@media (min-width: 720px) {
+    .comparison-kpis {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+.comparison-kpi {
+    background: linear-gradient(135deg, rgba(30, 64, 175, 0.85), rgba(37, 99, 235, 0.85));
+    color: var(--white);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md) var(--space-lg);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.comparison-kpi .kpi-label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.85;
+}
+
+.comparison-kpi .kpi-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.comparison-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    min-height: 32px;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--gray-100);
+    color: var(--gray-700);
+    font-size: 0.85rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.filter-chip button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.comparison-grid-layout {
+    display: grid;
+    gap: var(--space-xl);
+}
+
+.comparison-main {
+    display: grid;
+    gap: var(--space-xl);
+}
+
+@media (min-width: 1024px) {
+    .comparison-main {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .comparison-grid-layout {
+        grid-template-rows: auto auto;
+    }
+    .comparison-bottom {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-xl);
+    }
+}
+
+.comparison-bottom {
+    display: grid;
+    gap: var(--space-xl);
+}
+
+.chart-container {
+    width: 100%;
+    height: 380px;
+}
+
+#costHeatmap {
+    height: 420px;
+}
+
+.comparison-insights {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-xl);
+    padding: var(--space-xl);
+    box-shadow: var(--shadow-md);
+}
+
+.insights-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.export-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.insights-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    color: var(--gray-700);
+    font-size: 0.95rem;
+}
+
+.insight-highlight {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--primary-blue);
+}
+
+.insight-list {
+    list-style: disc;
+    padding-left: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: var(--space-md);
+    color: var(--gray-500);
+    font-size: 0.95rem;
+}
+
+.anomaly-container h4,
+.pattern-container h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--gray-800);
+}
+
+@media (max-width: 768px) {
+    .comparison-card {
+        padding: var(--space-lg);
+    }
+    .comparison-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .chart-container,
+    #costHeatmap {
+        height: 320px;
+    }
+}
+
 /* Map Styling */
 .leaflet-container {
     background: #ffffff; /* pure white in light mode */
