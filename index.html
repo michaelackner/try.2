@@ -216,7 +216,7 @@
             <section class="comparison-card" id="comparisonModule">
                 <div class="card-header">
                     <h2>Deal Comparison Analysis</h2>
-                    <p>Spotlight deals where processed quantities exceed the reference workbook</p>
+                    <p>Highlight deals where processed totals exceed the reference workbook and expose missing cost lines</p>
                 </div>
 
                 <div class="comparison-upload-grid">
@@ -301,7 +301,7 @@
                     <div class="comparison-top-grid">
                         <div class="comparison-kpis">
                             <div class="comparison-kpi">
-                                <span class="kpi-label">Deals with variance</span>
+                                <span class="kpi-label">Deals with higher costs</span>
                                 <span class="kpi-value" id="kpiDeals">-</span>
                             </div>
                             <div class="comparison-kpi">
@@ -313,7 +313,7 @@
                                 <span class="kpi-value" id="kpiAverageVariance">-</span>
                             </div>
                             <div class="comparison-kpi">
-                                <span class="kpi-label">Unregistered cost types</span>
+                                <span class="kpi-label">Deals missing costs</span>
                                 <span class="kpi-value" id="kpiUnregistered">-</span>
                             </div>
                         </div>
@@ -322,6 +322,40 @@
 
                     <div class="comparison-grid-layout">
                         <div class="comparison-main">
+                            <div class="chart-card" id="comparisonStatusCard">
+                                <div class="chart-header compact">
+                                    <div>
+                                        <h3>Cost variance spotlight</h3>
+                                        <p class="chart-subtitle">Click categories to filter the drilldown table.</p>
+                                    </div>
+                                    <button class="btn ghost" id="statusFilterReset" type="button">Reset view</button>
+                                </div>
+                                <div id="dealStatusChart" class="chart-container status-chart"></div>
+                            </div>
+
+                            <div class="chart-card table-card" id="comparisonDrilldownCard">
+                                <div class="chart-header compact">
+                                    <div>
+                                        <h3>Flagged deal drilldown</h3>
+                                        <p id="dealStatusSubtitle" class="chart-subtitle">All deals requiring manual cost review.</p>
+                                    </div>
+                                </div>
+                                <div class="deal-table-wrapper">
+                                    <table class="deal-table" id="dealDrilldownTable" aria-label="Deals with cost discrepancies">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Deal</th>
+                                                <th scope="col">USD difference</th>
+                                                <th scope="col">Greater costs</th>
+                                                <th scope="col">Missing costs</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dealDrilldownBody"></tbody>
+                                    </table>
+                                    <div id="dealDrilldownEmpty" class="empty-state" style="display:none;">Upload comparison workbooks to explore deal-level cost gaps.</div>
+                                </div>
+                            </div>
+
                             <div class="chart-card" id="comparisonBarCard">
                                 <div class="chart-header compact">
 
