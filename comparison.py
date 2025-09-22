@@ -481,6 +481,10 @@ class DealComparisonAnalyzer:
                     unregistered_for_deal.append(cost.label)
                     tracker = unregistered_cost_tracker.setdefault(
                         cost.label,
+                        {"total_difference": 0.0, "deals": set()}
+                    )
+                    tracker["total_difference"] += float(difference)
+                    tracker["deals"].add(deal_id)
 
                 elif formatted_value and comparison_value:
                     status = "Registered"
@@ -670,9 +674,12 @@ class DealComparisonAnalyzer:
 
                 status_row.append(status)
                 value_row.append(value)
+                diff_value = float(formatted_value) - float(comparison_value)
+                direction = "↑" if diff_value > 0 else ("↓" if diff_value < 0 else "–")
                 hover_row.append(
                     f"Formatted: {_format_currency(float(formatted_value))}<br>"
-                    f"Comparison: {_format_currency(float(comparison_value))}"
+                    f"Comparison: {_format_currency(float(comparison_value))}<br>"
+                    f"Δ {direction} {_format_currency(diff_value)}"
                 )
 
             status_matrix.append(status_row)
@@ -808,7 +815,10 @@ class DealComparisonAnalyzer:
                 unregistered_costs, key=lambda item: item["impact"], default=None
             )
             if top_unregistered:
-
+                unregistered_summary = (
+                    "Largest unregistered impact: "
+                    f"{top_unregistered['cost_type']} "
+                    f"({_format_currency(top_unregistered['impact'])})."
                 )
             else:
                 unregistered_summary = "Unregistered cost details unavailable."
