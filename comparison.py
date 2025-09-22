@@ -448,7 +448,7 @@ class DealComparisonAnalyzer:
 
         deals_payload: List[Dict[str, Any]] = []
         unregistered_cost_tracker: Dict[str, Dict[str, Any]] = {}
-        deals_with_unregistered = 0
+
 
         cost_columns = sorted(cost_info.values(), key=lambda c: c.label.lower())
         for _, row in filtered.iterrows():
@@ -457,7 +457,6 @@ class DealComparisonAnalyzer:
             unregistered_for_deal: List[str] = []
             partial_for_deal: List[str] = []
 
-            unregistered_difference = 0.0
 
             for cost in cost_columns:
                 formatted_value = (
@@ -482,12 +481,7 @@ class DealComparisonAnalyzer:
                     unregistered_for_deal.append(cost.label)
                     tracker = unregistered_cost_tracker.setdefault(
                         cost.label,
-                        {"total_difference": 0.0, "formatted_total": 0.0, "deals": set()},
-                    )
-                    tracker["total_difference"] += float(difference)
-                    tracker["formatted_total"] += float(formatted_value)
-                    tracker.setdefault("deals", set()).add(deal_id)
-                    unregistered_difference += float(difference)
+
                 elif formatted_value and comparison_value:
                     status = "Registered"
                     variance = abs(difference) / comparison_value * 100 if comparison_value else 0
@@ -512,7 +506,7 @@ class DealComparisonAnalyzer:
             overall_status = "Registered"
             if unregistered_for_deal:
                 overall_status = "Unregistered"
-                deals_with_unregistered += 1
+
             elif partial_for_deal:
                 overall_status = "Partial"
 
@@ -528,9 +522,7 @@ class DealComparisonAnalyzer:
                     "rank": int(row.get("rank", 0)) if len(filtered) else 0,
                     "cost_registry_status": overall_status,
                     "costs": cost_details,
-                    "unregistered_costs": sorted(unregistered_for_deal),
-                    "unregistered_cost_count": len(unregistered_for_deal),
-                    "unregistered_difference": round(float(unregistered_difference), 2),
+
                 }
             )
 
@@ -582,10 +574,7 @@ class DealComparisonAnalyzer:
                 {
                     "cost_type": cost_label,
                     "impact": round(float(data["total_difference"]), 2),
-                    "formatted_total": round(float(data.get("formatted_total", data["total_difference"])), 2),
-                    "deal_count": len(data.get("deals", [])),
-                    "deals": sorted(list(data.get("deals", []))),
-                    "missing_in_reference": True,
+
                 }
             )
 
@@ -606,7 +595,7 @@ class DealComparisonAnalyzer:
                 "total_difference": round(total_difference, 2),
                 "average_variance": round(average_variance, 2),
                 "unregistered_cost_types": len(unregistered_costs),
-                "deals_with_unregistered": deals_with_unregistered,
+
                 "anomaly_count": len(anomalies),
             },
             "deals": deals_payload,
@@ -819,11 +808,7 @@ class DealComparisonAnalyzer:
                 unregistered_costs, key=lambda item: item["impact"], default=None
             )
             if top_unregistered:
-                impact_text = _format_currency(top_unregistered["impact"])
-                unregistered_summary = (
-                    f"{len(unregistered_costs)} cost types are unregistered, with "
-                    f"{top_unregistered['cost_type']} missing entirely from the comparison sheet "
-                    f"({impact_text} impact)"
+
                 )
             else:
                 unregistered_summary = "Unregistered cost details unavailable."

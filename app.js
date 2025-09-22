@@ -800,13 +800,7 @@ class DealComparisonDashboard {
             deals: new Set(),
             costTypes: new Set()
         };
-        this.defaultPlotlyConfig = {
-            responsive: true,
-            displaylogo: false,
-            displayModeBar: true,
-            scrollZoom: true,
-            modeBarButtonsToRemove: ['toImage']
-        };
+
 
         this.elements = this.cacheElements();
         this.bindEvents();
@@ -857,8 +851,7 @@ class DealComparisonDashboard {
             varianceChart: document.getElementById('dealVarianceChart'),
             waterfallChart: document.getElementById('costWaterfallChart'),
             treemapChart: document.getElementById('unregisteredTreemap'),
-            heatmapChart: document.getElementById('costHeatmap'),
-            unregisteredAlerts: document.getElementById('unregisteredAlerts')
+
         };
     }
 
@@ -1032,9 +1025,7 @@ class DealComparisonDashboard {
             this.elements.kpiAverageVariance.textContent = `${value.toFixed(2)}%`;
         }
         if (this.elements.kpiUnregistered) {
-            const typeCount = this.formatNumber(overview.unregistered_cost_types || 0);
-            const dealCount = this.formatNumber(overview.deals_with_unregistered || 0);
-            this.elements.kpiUnregistered.textContent = `${typeCount} types / ${dealCount} deals`;
+
         }
     }
 
@@ -1105,19 +1096,7 @@ class DealComparisonDashboard {
         this.renderWaterfallChart(filtered);
         this.renderTreemap(filtered);
         this.renderHeatmap();
-        this.renderUnregisteredAlerts(filtered);
-    }
 
-    getPlotlyConfig(overrides = {}) {
-        const base = { ...this.defaultPlotlyConfig };
-        if (overrides.modeBarButtonsToRemove) {
-            const merged = new Set([
-                ...(this.defaultPlotlyConfig.modeBarButtonsToRemove || []),
-                ...overrides.modeBarButtonsToRemove
-            ]);
-            overrides = { ...overrides, modeBarButtonsToRemove: Array.from(merged) };
-        }
-        return { ...base, ...overrides };
     }
 
     renderVarianceChart(filteredDeals) {
@@ -1132,18 +1111,7 @@ class DealComparisonDashboard {
         const formatted = topDeals.map((deal) => deal.formatted_quantity);
         const comparison = topDeals.map((deal) => deal.comparison_quantity);
         const difference = topDeals.map((deal) => Math.max(deal.difference, 0));
-        const differenceColors = topDeals.map((deal) =>
-            (deal.unregistered_cost_count || 0) > 0 ? '#fb923c' : '#ef4444'
-        );
-        const differenceNotes = topDeals.map((deal) => {
-            const missing = (deal.unregistered_costs || []).slice(0, 4);
-            const remainder = (deal.unregistered_costs || []).length - missing.length;
-            if (missing.length) {
-                const suffix = remainder > 0 ? `, +${remainder} more` : '';
-                return `Missing in comparison: ${missing.join(', ')}${suffix}`;
-            }
-            return 'All cost types present in comparison workbook';
-        });
+
 
         const traces = [
             {
@@ -1171,16 +1139,14 @@ class DealComparisonDashboard {
                 x: difference,
                 y: labels,
                 base: comparison,
-                marker: { color: differenceColors, opacity: 0.85 },
-                customdata: differenceNotes,
-                hovertemplate: 'Deal %{y}<br>Difference: %{x:$,.2f}<br>%{customdata}<extra></extra>'
+
             }
         ];
 
         const layout = {
             barmode: 'overlay',
             hovermode: 'closest',
-            dragmode: 'zoom',
+
             margin: { l: 140, r: 30, t: 20, b: 40 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
@@ -1200,21 +1166,12 @@ class DealComparisonDashboard {
             }
         };
 
-        Plotly.react(
-            container,
-            traces,
-            layout,
-            this.getPlotlyConfig({ modeBarButtonsToAdd: ['hovercompare', 'hoverclosest'] })
-        );
         container.on('plotly_click', (event) => {
             if (!event || !event.points || !event.points[0]) return;
             const dealId = event.points[0].y;
             this.toggleDealFilter(dealId);
         });
-        container.on('plotly_doubleclick', () => {
-            Plotly.relayout(container, { 'xaxis.autorange': true, 'yaxis.autorange': true });
-            this.resetFilters();
-        });
+
     }
 
     renderWaterfallChart(filteredDeals) {
@@ -1231,7 +1188,7 @@ class DealComparisonDashboard {
         const values = [breakdown.comparisonTotal];
         const text = [this.formatCurrency(breakdown.comparisonTotal)];
         const colors = ['#1e3a8a'];
-        const statusMessages = ['Reference workbook total'];
+
 
         breakdown.costs.forEach((cost) => {
             labels.push(cost.cost_type);
@@ -1240,13 +1197,7 @@ class DealComparisonDashboard {
             text.push(this.formatCurrency(cost.difference));
             if (cost.status === 'Unregistered') {
                 colors.push('#fb923c');
-                statusMessages.push('Absent from comparison workbook');
-            } else if (cost.difference >= 0) {
-                colors.push('#ef4444');
-                statusMessages.push('Processed higher than reference');
-            } else {
-                colors.push('#10b981');
-                statusMessages.push('Processed lower than reference');
+
             }
         });
 
@@ -1255,7 +1206,6 @@ class DealComparisonDashboard {
         values.push(breakdown.formattedTotal);
         text.push(this.formatCurrency(breakdown.formattedTotal));
         colors.push('#1e40af');
-        statusMessages.push('Processed workbook total');
 
         const trace = {
             type: 'waterfall',
@@ -1270,15 +1220,14 @@ class DealComparisonDashboard {
             increasing: { marker: { color: '#ef4444' } },
             totals: { marker: { color: '#1e3a8a' } },
             marker: { color: colors },
-            customdata: statusMessages,
-            hovertemplate: '<b>%{x}</b><br>%{y:$,.2f}<br>%{customdata}<extra></extra>'
+
         };
 
         const layout = {
             margin: { t: 20, l: 60, r: 30, b: 60 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
-            dragmode: 'zoom',
+
             yaxis: {
                 title: 'USD',
                 tickprefix: '$',
@@ -1286,7 +1235,7 @@ class DealComparisonDashboard {
             }
         };
 
-        Plotly.react(container, [trace], layout, this.getPlotlyConfig());
+
         container.on('plotly_click', (event) => {
             if (!event || !event.points || !event.points[0]) return;
             const label = event.points[0].x;
@@ -1294,10 +1243,7 @@ class DealComparisonDashboard {
                 this.toggleCostFilter(label);
             }
         });
-        container.on('plotly_doubleclick', () => {
-            Plotly.relayout(container, { 'xaxis.autorange': true, 'yaxis.autorange': true });
-            this.resetFilters();
-        });
+
     }
 
     renderTreemap(filteredDeals) {
@@ -1314,16 +1260,7 @@ class DealComparisonDashboard {
         const parents = ['', ...unregistered.map(() => 'Unregistered Costs')];
         const values = [totalImpact, ...unregistered.map((item) => item.impact)];
         const colors = [0, ...unregistered.map((item) => item.deal_count)];
-        const text = ['Total missing impact', ...unregistered.map((item) => `${this.formatNumber(item.deal_count)} deals`)].map((info, idx) => `${labels[idx]}<br>${info}`);
-        const customdata = ['All cost types with missing reference values', ...unregistered.map((item) => {
-            const dealsPreview = (item.deals || []).slice(0, 4);
-            const remainder = (item.deals || []).length - dealsPreview.length;
-            if (dealsPreview.length) {
-                const more = remainder > 0 ? `, +${remainder} more` : '';
-                return `${this.formatNumber(item.deal_count)} deals missing (${dealsPreview.join(', ')}${more})`;
-            }
-            return `${this.formatNumber(item.deal_count)} deals missing`;
-        })];
+
 
         const trace = {
             type: 'treemap',
@@ -1331,8 +1268,7 @@ class DealComparisonDashboard {
             parents,
             values,
             textinfo: 'label+value',
-            hovertemplate: '<b>%{label}</b><br>Missing impact: %{value:$,.2f}<br>%{customdata}<extra></extra>',
-            customdata,
+
             marker: {
                 colors,
                 colorscale: 'YlOrRd'
@@ -1345,12 +1281,7 @@ class DealComparisonDashboard {
             plot_bgcolor: 'rgba(0,0,0,0)'
         };
 
-        Plotly.react(
-            container,
-            [trace],
-            layout,
-            this.getPlotlyConfig({ modeBarButtonsToRemove: ['select2d', 'lasso2d'] })
-        );
+
         container.on('plotly_click', (event) => {
             if (!event || !event.points || !event.points[0]) return;
             const label = event.points[0].label;
@@ -1421,7 +1352,7 @@ class DealComparisonDashboard {
             margin: { t: 30, l: 140, r: 20, b: 80 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
-            dragmode: 'zoom',
+
             xaxis: {
                 tickangle: -45,
                 automargin: true
@@ -1431,12 +1362,7 @@ class DealComparisonDashboard {
             }
         };
 
-        Plotly.react(
-            container,
-            [trace],
-            layout,
-            this.getPlotlyConfig({ modeBarButtonsToAdd: ['hovercompare'], modeBarButtonsToRemove: ['select2d', 'lasso2d'] })
-        );
+
         container.on('plotly_click', (event) => {
             if (!event || !event.points || !event.points[0]) return;
             const point = event.points[0];
@@ -1449,10 +1375,7 @@ class DealComparisonDashboard {
                 this.toggleCostFilter(costType);
             }
         });
-        container.on('plotly_doubleclick', () => {
-            Plotly.relayout(container, { 'xaxis.autorange': true, 'yaxis.autorange': true });
-            this.resetFilters();
-        });
+
     }
 
     aggregateCostBreakdown(deals) {
@@ -1492,15 +1415,7 @@ class DealComparisonDashboard {
         deals.forEach((deal) => {
             (deal.costs || []).forEach((cost) => {
                 if (cost.status === 'Unregistered') {
-                    const current = registry.get(cost.cost_type) || {
-                        cost_type: cost.cost_type,
-                        impact: 0,
-                        formatted_total: 0,
-                        deal_count: 0,
-                        deals: new Set()
-                    };
-                    current.impact += Math.abs(cost.difference || 0);
-                    current.formatted_total += Math.abs(cost.formatted || cost.difference || 0);
+
                     current.deals.add(deal.deal_id);
                     current.deal_count = current.deals.size;
                     registry.set(cost.cost_type, current);
@@ -1510,96 +1425,19 @@ class DealComparisonDashboard {
         return Array.from(registry.values()).map((item) => ({
             cost_type: item.cost_type,
             impact: item.impact,
-            formatted_total: item.formatted_total,
+
             deal_count: item.deal_count,
             deals: Array.from(item.deals)
         })).sort((a, b) => b.impact - a.impact);
     }
 
-    renderUnregisteredAlerts(filteredDeals = []) {
-        if (!this.elements.unregisteredAlerts) return;
-        const container = this.elements.unregisteredAlerts;
-        container.innerHTML = '';
-
-        let sourceDeals = Array.isArray(filteredDeals) ? filteredDeals : [];
-        if (!sourceDeals.length && this.analysisData?.deals) {
-            sourceDeals = this.analysisData.deals
-                .filter((deal) => (deal.difference || 0) > 0)
-                .map((deal) => ({
-                    ...deal,
-                    costs: (deal.costs || []).map((cost) => ({ ...cost }))
-                }));
-        }
-
-        const unregistered = this.aggregateUnregistered(sourceDeals);
-        if (!unregistered.length) {
-            container.innerHTML = '<div class="empty-state">No unregistered costs detected.</div>';
-            return;
-        }
-
-        const maxDealChips = 6;
-        unregistered.forEach((item) => {
-            const alert = document.createElement('div');
-            alert.className = 'missing-alert';
-
-            const header = document.createElement('div');
-            header.className = 'missing-alert-header';
-            const title = document.createElement('span');
-            title.className = 'missing-alert-title';
-            title.textContent = item.cost_type;
-            const impact = document.createElement('span');
-            impact.className = 'missing-alert-impact';
-            impact.textContent = this.formatCurrency(item.impact || 0);
-            header.appendChild(title);
-            header.appendChild(impact);
-            alert.appendChild(header);
-
-            const meta = document.createElement('div');
-            meta.className = 'missing-alert-meta';
-            const dealWord = item.deal_count === 1 ? 'deal' : 'deals';
-            const impactValue = this.formatCurrency(item.formatted_total || item.impact || 0);
-            meta.textContent = `${this.formatNumber(item.deal_count || 0)} ${dealWord} missing this cost in the comparison sheet • ${impactValue} not captured`;
-            alert.appendChild(meta);
-
-            if (item.deals && item.deals.length) {
-                const chips = document.createElement('div');
-                chips.className = 'missing-alert-deals';
-                item.deals.slice(0, maxDealChips).forEach((dealId) => {
-                    const chip = document.createElement('button');
-                    chip.type = 'button';
-                    chip.textContent = dealId;
-                    chip.addEventListener('click', () => this.toggleDealFilter(dealId));
-                    chips.appendChild(chip);
-                });
-                if (item.deals.length > maxDealChips) {
-                    const more = document.createElement('span');
-                    more.className = 'missing-alert-more';
-                    more.textContent = `+${item.deals.length - maxDealChips} more`;
-                    chips.appendChild(more);
-                }
-                alert.appendChild(chips);
-            }
-
-            const actions = document.createElement('div');
-            actions.className = 'missing-alert-actions';
-            const focusCost = document.createElement('button');
-            focusCost.type = 'button';
-            focusCost.textContent = 'Focus cost type';
-            focusCost.addEventListener('click', () => this.toggleCostFilter(item.cost_type));
-            actions.appendChild(focusCost);
-            alert.appendChild(actions);
-
-            container.appendChild(alert);
-        });
-    }
 
     getFilteredDeals() {
         if (!this.analysisData?.deals) {
             return [];
         }
         const deals = this.analysisData.deals.map((deal) => ({ ...deal, costs: (deal.costs || []).map((cost) => ({ ...cost })) }));
-        const positiveDeals = deals.filter((deal) => (deal.difference || 0) > 0);
-        let filtered = positiveDeals;
+
         if (this.filters.deals.size) {
             filtered = filtered.filter((deal) => this.filters.deals.has(deal.deal_id));
         }
