@@ -444,53 +444,90 @@ class DealComparisonAnalyzer:
     def _build_analysis_payload(
         self, merged: pd.DataFrame, cost_info: Dict[str, CostColumn]
     ) -> Dict[str, Any]:
-        filtered = merged[merged["quantity_difference"] > 0].copy()
-
+        cost_columns = sorted(cost_info.values(), key=lambda c: c.label.lower())
+        cost_flag_counts: Dict[str, Dict[str, int]] = {
+            cost.label: {"missing_deals": 0, "greater_deals": 0}
+            for cost in cost_columns
+        }
+        deal_status_counts: Dict[str, int] = {
+            "greater": 0,
+            "missing": 0,
+            "aligned": 0,
+            "both": 0,
+        }
         deals_payload: List[Dict[str, Any]] = []
         unregistered_cost_tracker: Dict[str, Dict[str, Any]] = {}
+        analysis_indices: List[Any] = []
 
-
-        cost_columns = sorted(cost_info.values(), key=lambda c: c.label.lower())
-        for _, row in filtered.iterrows():
+        epsilon = 1e-6
+        for idx, row in merged.iterrows():
             deal_id = row["deal_id"]
             cost_details: List[Dict[str, Any]] = []
             unregistered_for_deal: List[str] = []
             partial_for_deal: List[str] = []
+            missing_for_deal: List[str] = []
+            greater_for_deal: List[str] = []
 
+            difference_value = float(row.get("quantity_difference", 0.0))
+            has_difference = abs(difference_value) > epsilon
 
             for cost in cost_columns:
-                formatted_value = (
-                    row.get(f"cost_{cost.key}_formatted", 0.0) if cost.formatted_column else 0.0
+                formatted_raw = (
+                    row.get(f"cost_{cost.key}_formatted", 0.0)
+                    if cost.formatted_column
+                    else 0.0
                 )
-                comparison_value = (
+                comparison_raw = (
                     row.get(f"cost_{cost.key}_comparison", 0.0)
                     if cost.comparison_column
                     else 0.0
                 )
 
+                formatted_value = (
+                    float(formatted_raw) if pd.notna(formatted_raw) else 0.0
+                )
+                comparison_value = (
+                    float(comparison_raw) if pd.notna(comparison_raw) else 0.0
+                )
+
                 difference = formatted_value - comparison_value
                 percentage = (
                     (difference / comparison_value * 100)
-                    if comparison_value
-                    else (np.nan if formatted_value == 0 else np.nan)
+                    if abs(comparison_value) > epsilon
+                    else (np.nan if abs(formatted_value) <= epsilon else np.nan)
                 )
 
-                status = "Missing"
-                if formatted_value and not comparison_value:
+                has_formatted = abs(formatted_value) > epsilon
+                has_comparison = abs(comparison_value) > epsilon
+                missing_flag = has_comparison and not has_formatted
+                greater_flag = has_formatted and (difference > epsilon)
+                unregistered_flag = has_formatted and not has_comparison
+
+                status = "Registered"
+                if unregistered_flag:
                     status = "Unregistered"
                     unregistered_for_deal.append(cost.label)
                     tracker = unregistered_cost_tracker.setdefault(
                         cost.label,
-
-                elif formatted_value and comparison_value:
-                    status = "Registered"
-                    variance = abs(difference) / comparison_value * 100 if comparison_value else 0
+                        {"total_difference": 0.0, "deals": set()},
+                    )
+                    tracker["total_difference"] += difference
+                    tracker["deals"].add(deal_id)
+                elif missing_flag:
+                    status = "Missing"
+                    missing_for_deal.append(cost.label)
+                elif has_formatted or has_comparison:
+                    variance = (
+                        abs(difference) / comparison_value * 100
+                        if abs(comparison_value) > epsilon
+                        else 0.0
+                    )
                     if variance >= 5:
                         status = "Partial"
                         partial_for_deal.append(cost.label)
-                elif not formatted_value and comparison_value:
-                    status = "Partial"
-                    partial_for_deal.append(cost.label)
+
+                if greater_flag:
+                    greater_for_deal.append(cost.label)
 
                 cost_details.append(
                     {
@@ -500,13 +537,44 @@ class DealComparisonAnalyzer:
                         "difference": round(float(difference), 2),
                         "percentage": None if np.isnan(percentage) else round(float(percentage), 2),
                         "status": status,
+                        "missing": bool(missing_flag),
+                        "greater": bool(greater_flag),
                     }
                 )
+
+            missing_unique = sorted(set(missing_for_deal))
+            greater_unique = sorted(set(greater_for_deal))
+            for label in missing_unique:
+                cost_flag_counts[label]["missing_deals"] += 1
+            for label in greater_unique:
+                cost_flag_counts[label]["greater_deals"] += 1
+
+            has_missing = bool(missing_unique)
+            has_greater = bool(greater_unique)
+            should_include = (
+                has_difference
+                or has_missing
+                or has_greater
+                or bool(unregistered_for_deal)
+            )
+            if not should_include:
+                continue
+
+            analysis_indices.append(idx)
+            if has_missing and has_greater:
+                deal_status_counts["both"] += 1
+            elif has_greater:
+                deal_status_counts["greater"] += 1
+            elif has_missing:
+                deal_status_counts["missing"] += 1
+            else:
+                deal_status_counts["aligned"] += 1
 
             overall_status = "Registered"
             if unregistered_for_deal:
                 overall_status = "Unregistered"
-
+            elif has_missing:
+                overall_status = "Missing"
             elif partial_for_deal:
                 overall_status = "Partial"
 
@@ -519,26 +587,68 @@ class DealComparisonAnalyzer:
                     "percentage_variance": None
                     if np.isnan(row["percentage_variance"])
                     else round(float(row["percentage_variance"]), 2),
-                    "rank": int(row.get("rank", 0)) if len(filtered) else 0,
+                    "rank": 0,
                     "cost_registry_status": overall_status,
                     "costs": cost_details,
-
+                    "missing_costs": missing_unique,
+                    "greater_costs": greater_unique,
+                    "missing_cost_count": len(missing_unique),
+                    "greater_cost_count": len(greater_unique),
+                    "variance_category": (
+                        "both"
+                        if has_missing and has_greater
+                        else "greater"
+                        if has_greater
+                        else "missing"
+                        if has_missing
+                        else "aligned"
+                    ),
+                    "__row_index": idx,
                 }
             )
 
-        total_difference = float(filtered["quantity_difference"].sum())
+        if analysis_indices:
+            analysis_df = merged.loc[analysis_indices].copy()
+        else:
+            analysis_df = merged.iloc[0:0].copy()
+
+        if len(analysis_df):
+            analysis_df["rank"] = (
+                analysis_df["abs_difference"].rank(method="first", ascending=False).astype(int)
+            )
+            rank_lookup = analysis_df["rank"].to_dict()
+        else:
+            rank_lookup = {}
+
+        for deal in deals_payload:
+            row_index = deal.pop("__row_index", None)
+            deal["rank"] = int(rank_lookup.get(row_index, 0)) if row_index is not None else 0
+
+        aligned_total = max(int(len(merged) - len(analysis_indices)), 0)
+        if aligned_total:
+            deal_status_counts["aligned"] += aligned_total
+
+        total_difference = float(analysis_df["quantity_difference"].abs().sum()) if len(analysis_df) else 0.0
         average_variance = float(
-            filtered["percentage_variance"].mean(skipna=True)
-            if len(filtered)
+            analysis_df["percentage_variance"].abs().mean(skipna=True)
+            if len(analysis_df)
             else 0.0
         )
 
-        top_deals = sorted(deals_payload, key=lambda d: d["difference"], reverse=True)[:20]
+        top_deals = sorted(
+            deals_payload,
+            key=lambda d: abs(d["difference"]),
+            reverse=True,
+        )[:20]
 
         cost_breakdown: List[Dict[str, Any]] = []
         for cost in cost_columns:
-            formatted_series = filtered.get(f"cost_{cost.key}_formatted", pd.Series(dtype=float))
-            comparison_series = filtered.get(f"cost_{cost.key}_comparison", pd.Series(dtype=float))
+            formatted_series = analysis_df.get(
+                f"cost_{cost.key}_formatted", pd.Series(dtype=float)
+            )
+            comparison_series = analysis_df.get(
+                f"cost_{cost.key}_comparison", pd.Series(dtype=float)
+            )
 
             formatted_total = float(formatted_series.sum()) if len(formatted_series) else 0.0
             comparison_total = float(comparison_series.sum()) if len(comparison_series) else 0.0
@@ -565,6 +675,8 @@ class DealComparisonAnalyzer:
                     "difference": round(difference, 2),
                     "percentage": None if np.isnan(percentage) else round(float(percentage), 2),
                     "status": status,
+                    "missing_deals": cost_flag_counts[cost.label]["missing_deals"],
+                    "greater_deals": cost_flag_counts[cost.label]["greater_deals"],
                 }
             )
 
@@ -574,12 +686,25 @@ class DealComparisonAnalyzer:
                 {
                     "cost_type": cost_label,
                     "impact": round(float(data["total_difference"]), 2),
-
+                    "deal_count": len(data["deals"]),
+                    "deals": sorted(data["deals"]),
                 }
             )
 
-        heatmap = self._build_heatmap(filtered, cost_columns)
-        anomalies, cost_anomalies = self._detect_anomalies(filtered, cost_columns)
+        cost_highlights: List[Dict[str, Any]] = []
+        for cost in cost_columns:
+            counts = cost_flag_counts[cost.label]
+            if counts["missing_deals"] or counts["greater_deals"]:
+                cost_highlights.append(
+                    {
+                        "cost_type": cost.label,
+                        "missing_deals": counts["missing_deals"],
+                        "greater_deals": counts["greater_deals"],
+                    }
+                )
+
+        heatmap = self._build_heatmap(analysis_df, cost_columns)
+        anomalies, cost_anomalies = self._detect_anomalies(analysis_df, cost_columns)
         patterns = self._detect_patterns(deals_payload)
 
         summary_report = self._build_summary_report(
@@ -587,21 +712,31 @@ class DealComparisonAnalyzer:
             total_difference,
             unregistered_costs,
             patterns,
+            cost_highlights,
+            deal_status_counts,
         )
 
         return {
             "overview": {
-                "total_deals": len(deals_payload),
+                "total_deals": int(len(merged)),
                 "total_difference": round(total_difference, 2),
                 "average_variance": round(average_variance, 2),
                 "unregistered_cost_types": len(unregistered_costs),
-
+                "deal_status_counts": deal_status_counts,
+                "flagged_deals": deal_status_counts["greater"]
+                + deal_status_counts["missing"]
+                + deal_status_counts["both"],
+                "deals_with_greater_costs": deal_status_counts["greater"]
+                + deal_status_counts["both"],
+                "deals_with_missing_costs": deal_status_counts["missing"]
+                + deal_status_counts["both"],
                 "anomaly_count": len(anomalies),
             },
             "deals": deals_payload,
             "top_deals": top_deals,
             "cost_breakdown": cost_breakdown,
             "unregistered_costs": unregistered_costs,
+            "cost_highlights": cost_highlights,
             "heatmap": heatmap,
             "anomalies": anomalies,
             "cost_anomalies": cost_anomalies,
@@ -618,6 +753,7 @@ class DealComparisonAnalyzer:
         z_values: List[List[float]] = []
         hover: List[List[str]] = []
 
+        epsilon = 1e-6
         for _, row in df.iterrows():
             status_row: List[str] = []
             value_row: List[float] = []
@@ -638,17 +774,17 @@ class DealComparisonAnalyzer:
                     hover_row.append("No data")
                     continue
 
-                if formatted_value == 0 and comparison_value == 0:
+                difference = formatted_value - comparison_value
+                if abs(formatted_value) <= epsilon and abs(comparison_value) <= epsilon:
                     status = "Within"
                     value = 0
-                elif formatted_value and not comparison_value:
+                elif abs(formatted_value) > epsilon and abs(comparison_value) <= epsilon:
                     status = "Unregistered"
                     value = -10
-                elif not formatted_value and comparison_value:
-                    status = "5-20% Lower"
+                elif abs(formatted_value) <= epsilon and abs(comparison_value) > epsilon:
+                    status = "Missing"
                     value = -1
                 else:
-                    difference = formatted_value - comparison_value
                     percentage = (
                         difference / comparison_value * 100 if comparison_value else 0
                     )
@@ -671,8 +807,14 @@ class DealComparisonAnalyzer:
                 status_row.append(status)
                 value_row.append(value)
                 hover_row.append(
-                    f"Formatted: {_format_currency(float(formatted_value))}<br>"
-                    f"Comparison: {_format_currency(float(comparison_value))}"
+                    "Status: "
+                    + status
+                    + "<br>Formatted: "
+                    + _format_currency(float(formatted_value))
+                    + "<br>Comparison: "
+                    + _format_currency(float(comparison_value))
+                    + "<br>Difference: "
+                    + _format_currency(float(difference))
                 )
 
             status_matrix.append(status_row)
@@ -747,7 +889,12 @@ class DealComparisonAnalyzer:
 
     def _detect_patterns(self, deals: List[Dict[str, Any]]) -> Dict[str, Any]:
         pattern_map: Dict[Tuple[str, ...], List[str]] = {}
-        status_counts: Dict[str, int] = {"Registered": 0, "Partial": 0, "Unregistered": 0}
+        status_counts: Dict[str, int] = {
+            "Registered": 0,
+            "Partial": 0,
+            "Unregistered": 0,
+            "Missing": 0,
+        }
 
         for deal in deals:
             status = deal["cost_registry_status"]
@@ -782,12 +929,29 @@ class DealComparisonAnalyzer:
         total_difference: float,
         unregistered_costs: List[Dict[str, Any]],
         patterns: Dict[str, Any],
+        cost_highlights: List[Dict[str, Any]],
+        deal_status_counts: Dict[str, int],
     ) -> Dict[str, Any]:
+        greater_total = deal_status_counts.get("greater", 0) + deal_status_counts.get("both", 0)
+        missing_total = deal_status_counts.get("missing", 0) + deal_status_counts.get("both", 0)
+
         if deals:
-            headline = (
-                f"{len(deals)} deals show higher quantities in processed sheet, "
-                f"totaling {_format_currency(total_difference)} difference."
-            )
+            attention_parts: List[str] = []
+            if greater_total:
+                attention_parts.append(f"{greater_total} with higher costs")
+            if missing_total:
+                attention_parts.append(f"{missing_total} missing baseline costs")
+            if attention_parts:
+                detail = ", ".join(attention_parts)
+                headline = (
+                    f"{len(deals)} deals require attention ({detail}), "
+                    f"totaling {_format_currency(total_difference)} variance."
+                )
+            else:
+                headline = (
+                    f"{len(deals)} deals show higher quantities in processed sheet, "
+                    f"totaling {_format_currency(total_difference)} difference."
+                )
         else:
             headline = "No qualifying deals were found."
 
@@ -803,13 +967,54 @@ class DealComparisonAnalyzer:
         else:
             top_contributors = "No significant deal variances detected."
 
+        def _top_cost(field: str) -> Optional[Dict[str, Any]]:
+            candidates = [item for item in cost_highlights if item[field] > 0]
+            if not candidates:
+                return None
+            return max(candidates, key=lambda item: item[field])
+
+        top_greater = _top_cost("greater_deals")
+        top_missing = _top_cost("missing_deals")
+
+        if greater_total:
+            greater_summary = (
+                f"{greater_total} deals show higher costs than the comparison workbook."
+            )
+            if top_greater:
+                greater_summary += (
+                    f" {top_greater['cost_type']} is impacted in {top_greater['greater_deals']} deals."
+                )
+        else:
+            greater_summary = "No deals exceed reference cost totals."
+
+        if missing_total:
+            missing_summary = (
+                f"{missing_total} deals are missing cost lines recorded in the reference workbook."
+            )
+            if top_missing:
+                missing_summary += (
+                    f" {top_missing['cost_type']} is missing for {top_missing['missing_deals']} deals."
+                )
+        else:
+            missing_summary = "No reference cost lines are missing from the processed workbook."
+
         if unregistered_costs:
             top_unregistered = max(
                 unregistered_costs, key=lambda item: item["impact"], default=None
             )
             if top_unregistered:
-
-                )
+                impacted_count = top_unregistered.get("deal_count", 0)
+                impact = _format_currency(top_unregistered["impact"])
+                if impacted_count:
+                    unregistered_summary = (
+                        f"Unregistered costs remain for {top_unregistered['cost_type']} "
+                        f"across {impacted_count} deals totaling {impact}."
+                    )
+                else:
+                    unregistered_summary = (
+                        f"Unregistered costs remain for {top_unregistered['cost_type']} "
+                        f"totaling {impact}."
+                    )
             else:
                 unregistered_summary = "Unregistered cost details unavailable."
         else:
@@ -819,6 +1024,14 @@ class DealComparisonAnalyzer:
         if top_three:
             recommendations.append(
                 "Review the top contributing deals for manual confirmation of quantities."
+            )
+        if top_greater:
+            recommendations.append(
+                f"Validate {top_greater['cost_type']} postings on deals with higher costs."
+            )
+        if top_missing:
+            recommendations.append(
+                f"Recover missing {top_missing['cost_type']} charges from the baseline workbook."
             )
         if unregistered_costs:
             impacted = sorted(
@@ -842,6 +1055,8 @@ class DealComparisonAnalyzer:
         return {
             "headline": headline,
             "top_contributors": top_contributors,
+            "greater_costs": greater_summary,
+            "missing_costs": missing_summary,
             "unregistered_costs": unregistered_summary,
             "recommended_actions": recommendations,
         }

@@ -800,6 +800,14 @@ class DealComparisonDashboard {
             deals: new Set(),
             costTypes: new Set()
         };
+        this.activeStatusFilter = null;
+        this.statusBuckets = {
+            greater: [],
+            missing: [],
+            both: [],
+            aligned: []
+        };
+        this.currentFilteredDeals = [];
 
 
         this.elements = this.cacheElements();
@@ -848,6 +856,12 @@ class DealComparisonDashboard {
             anomalies: document.getElementById('comparisonAnomalies'),
             patterns: document.getElementById('comparisonPatterns'),
             exportButtons: document.querySelectorAll('.export-actions [data-export]'),
+            statusChart: document.getElementById('dealStatusChart'),
+            statusReset: document.getElementById('statusFilterReset'),
+            drilldownTable: document.getElementById('dealDrilldownTable'),
+            drilldownBody: document.getElementById('dealDrilldownBody'),
+            drilldownEmpty: document.getElementById('dealDrilldownEmpty'),
+            drilldownSubtitle: document.getElementById('dealStatusSubtitle'),
             varianceChart: document.getElementById('dealVarianceChart'),
             waterfallChart: document.getElementById('costWaterfallChart'),
             treemapChart: document.getElementById('unregisteredTreemap'),
@@ -923,6 +937,14 @@ class DealComparisonDashboard {
                     const type = button.getAttribute('data-export');
                     this.downloadExport(type);
                 });
+            });
+        }
+
+        if (el.statusReset) {
+            el.statusReset.addEventListener('click', () => {
+                this.activeStatusFilter = null;
+                this.renderStatusChart(this.currentFilteredDeals || this.getFilteredDeals());
+                this.renderDealTable();
             });
         }
     }
@@ -1005,6 +1027,14 @@ class DealComparisonDashboard {
         if (!this.analysisData || !this.elements.results) {
             return;
         }
+        this.activeStatusFilter = null;
+        this.statusBuckets = {
+            greater: [],
+            missing: [],
+            both: [],
+            aligned: []
+        };
+        this.currentFilteredDeals = [];
         this.elements.results.style.display = 'flex';
         this.renderKpis();
         this.updateFiltersUI();
@@ -1015,7 +1045,10 @@ class DealComparisonDashboard {
     renderKpis() {
         const overview = this.analysisData?.overview || {};
         if (this.elements.kpiDeals) {
-            this.elements.kpiDeals.textContent = this.formatNumber(overview.total_deals || 0);
+            const greaterDeals = typeof overview.deals_with_greater_costs === 'number'
+                ? overview.deals_with_greater_costs
+                : overview.total_deals || 0;
+            this.elements.kpiDeals.textContent = this.formatNumber(greaterDeals);
         }
         if (this.elements.kpiDifference) {
             this.elements.kpiDifference.textContent = this.formatCurrency(overview.total_difference || 0);
@@ -1025,7 +1058,10 @@ class DealComparisonDashboard {
             this.elements.kpiAverageVariance.textContent = `${value.toFixed(2)}%`;
         }
         if (this.elements.kpiUnregistered) {
-
+            const missingDeals = typeof overview.deals_with_missing_costs === 'number'
+                ? overview.deals_with_missing_costs
+                : overview.unregistered_cost_types || 0;
+            this.elements.kpiUnregistered.textContent = this.formatNumber(missingDeals);
         }
     }
 
@@ -1039,7 +1075,12 @@ class DealComparisonDashboard {
             this.elements.topDeals.textContent = summary.top_contributors || '';
         }
         if (this.elements.costSummary) {
-            this.elements.costSummary.textContent = summary.unregistered_costs || '';
+            const summaryParts = [
+                summary.greater_costs,
+                summary.missing_costs,
+                summary.unregistered_costs
+            ].filter(Boolean);
+            this.elements.costSummary.textContent = summaryParts.join(' ');
         }
 
         if (this.elements.recommendations) {
@@ -1073,7 +1114,12 @@ class DealComparisonDashboard {
             this.elements.patterns.innerHTML = '';
             const patterns = this.analysisData?.patterns || {};
             const statusCounts = patterns.status_counts || {};
-            const statusSummary = `Registered: ${this.formatNumber(statusCounts.Registered || 0)}, Partial: ${this.formatNumber(statusCounts.Partial || 0)}, Unregistered: ${this.formatNumber(statusCounts.Unregistered || 0)}`;
+            const statusSummary = [
+                `Registered: ${this.formatNumber(statusCounts.Registered || 0)}`,
+                `Partial: ${this.formatNumber(statusCounts.Partial || 0)}`,
+                `Missing: ${this.formatNumber(statusCounts.Missing || 0)}`,
+                `Unregistered: ${this.formatNumber(statusCounts.Unregistered || 0)}`
+            ].join(', ');
             const statusLi = document.createElement('li');
             statusLi.textContent = `Deal registry status mix — ${statusSummary}`;
             this.elements.patterns.appendChild(statusLi);
@@ -1092,11 +1138,269 @@ class DealComparisonDashboard {
 
     renderCharts() {
         const filtered = this.getFilteredDeals();
+        this.currentFilteredDeals = filtered;
+        this.renderStatusChart(filtered);
         this.renderVarianceChart(filtered);
         this.renderWaterfallChart(filtered);
         this.renderTreemap(filtered);
         this.renderHeatmap();
+        this.renderDealTable();
+    }
 
+    buildStatusBuckets(deals) {
+        const buckets = {
+            greater: [],
+            missing: [],
+            both: [],
+            aligned: []
+        };
+        (deals || []).forEach((deal) => {
+            const greaterCount = (deal.greater_cost_count || (deal.greater_costs?.length || 0));
+            const missingCount = (deal.missing_cost_count || (deal.missing_costs?.length || 0));
+            if (greaterCount > 0 && missingCount > 0) {
+                buckets.both.push(deal);
+            } else if (greaterCount > 0) {
+                buckets.greater.push(deal);
+            } else if (missingCount > 0) {
+                buckets.missing.push(deal);
+            } else {
+                buckets.aligned.push(deal);
+            }
+        });
+        return buckets;
+    }
+
+    renderStatusChart(filteredDeals) {
+        if (!this.elements.statusChart) return;
+        const container = this.elements.statusChart;
+        const deals = filteredDeals || [];
+        if (!deals.length) {
+            container.innerHTML = '<div class="empty-state">No deal variances detected.</div>';
+            this.statusBuckets = { greater: [], missing: [], both: [], aligned: [] };
+            return;
+        }
+
+        const buckets = this.buildStatusBuckets(deals);
+        this.statusBuckets = buckets;
+
+        const categories = [
+            { key: 'greater', label: 'Greater only', count: buckets.greater.length },
+            { key: 'missing', label: 'Missing only', count: buckets.missing.length },
+            { key: 'both', label: 'Greater & Missing', count: buckets.both.length },
+            { key: 'aligned', label: 'Aligned with reference', count: buckets.aligned.length }
+        ];
+
+        const palette = {
+            greater: '#ef4444',
+            missing: '#f97316',
+            both: '#7c3aed',
+            aligned: '#10b981'
+        };
+        const inactiveColor = '#d1d5db';
+        const activeKey = this.activeStatusFilter;
+
+        const values = categories.map((item) => item.count);
+        const labels = categories.map((item) => item.label);
+        const colors = categories.map((item) => {
+            if (!activeKey) {
+                return palette[item.key];
+            }
+            return activeKey === item.key ? palette[item.key] : inactiveColor;
+        });
+        const text = values.map((value) => `${value} deal${value === 1 ? '' : 's'}`);
+
+        Plotly.react(
+            container,
+            [
+                {
+                    type: 'bar',
+                    orientation: 'h',
+                    x: values,
+                    y: labels,
+                    text,
+                    textposition: 'auto',
+                    marker: {
+                        color: colors,
+                        line: { color: 'rgba(15,23,42,0.12)', width: 1 }
+                    },
+                    hovertemplate: '%{y}: %{x} deals<extra></extra>'
+                }
+            ],
+            {
+                margin: { l: 200, r: 20, t: 28, b: 40 },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                xaxis: {
+                    title: 'Number of deals',
+                    automargin: true,
+                    zeroline: false
+                },
+                yaxis: {
+                    automargin: true
+                }
+            },
+            { displayModeBar: false, responsive: true }
+        );
+
+        if (!container.dataset.statusEventsBound) {
+            container.on('plotly_click', (event) => {
+                if (!event || !event.points || !event.points[0]) return;
+                const label = event.points[0].y;
+                const match = categories.find((category) => category.label === label);
+                if (!match) return;
+                this.activeStatusFilter = this.activeStatusFilter === match.key ? null : match.key;
+                this.renderStatusChart(this.currentFilteredDeals || deals);
+                this.renderDealTable();
+            });
+            container.on('plotly_doubleclick', () => {
+                this.activeStatusFilter = null;
+                this.renderStatusChart(this.currentFilteredDeals || deals);
+                this.renderDealTable();
+            });
+            container.dataset.statusEventsBound = 'true';
+        }
+    }
+
+    renderDealTable(filteredDeals) {
+        if (!this.elements.drilldownBody || !this.elements.drilldownTable) return;
+        const body = this.elements.drilldownBody;
+        const emptyState = this.elements.drilldownEmpty;
+        const subtitle = this.elements.drilldownSubtitle;
+        const deals = filteredDeals || this.currentFilteredDeals || this.getFilteredDeals();
+        const buckets = this.buildStatusBuckets(deals);
+        this.statusBuckets = buckets;
+
+        let dataset;
+        let subtitleText;
+        switch (this.activeStatusFilter) {
+            case 'greater':
+                dataset = buckets.greater;
+                subtitleText = 'Deals with higher costs than the reference workbook.';
+                break;
+            case 'missing':
+                dataset = buckets.missing;
+                subtitleText = 'Deals missing cost lines recorded in the reference workbook.';
+                break;
+            case 'both':
+                dataset = buckets.both;
+                subtitleText = 'Deals with both higher and missing cost discrepancies.';
+                break;
+            case 'aligned':
+                dataset = buckets.aligned;
+                subtitleText = 'Deals aligned with the comparison totals.';
+                break;
+            default:
+                dataset = (deals || []).filter((deal) => {
+                    const greater = (deal.greater_cost_count || (deal.greater_costs?.length || 0)) > 0;
+                    const missing = (deal.missing_cost_count || (deal.missing_costs?.length || 0)) > 0;
+                    return greater || missing;
+                });
+                subtitleText = 'All deals requiring manual cost review.';
+                break;
+        }
+
+        if (subtitle) {
+            subtitle.textContent = subtitleText;
+        }
+
+        body.innerHTML = '';
+        if (!dataset.length) {
+            if (emptyState) {
+                emptyState.textContent = this.activeStatusFilter
+                    ? 'No deals match this status filter.'
+                    : 'No cost discrepancies found for the current filters.';
+                emptyState.style.display = 'block';
+            }
+            this.elements.drilldownTable.classList.add('is-empty');
+            return;
+        }
+
+        this.elements.drilldownTable.classList.remove('is-empty');
+        if (emptyState) emptyState.style.display = 'none';
+
+        const sortedDeals = dataset
+            .slice()
+            .sort((a, b) => Math.abs(b.difference || 0) - Math.abs(a.difference || 0));
+
+        sortedDeals.forEach((deal) => {
+            const row = document.createElement('tr');
+            const costMap = new Map((deal.costs || []).map((cost) => [cost.cost_type, cost]));
+
+            const dealCell = document.createElement('td');
+            const dealButton = document.createElement('button');
+            dealButton.type = 'button';
+            dealButton.className = 'link-btn';
+            dealButton.textContent = deal.deal_id || '—';
+            dealButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.toggleDealFilter(deal.deal_id);
+            });
+            dealCell.appendChild(dealButton);
+            const totals = document.createElement('div');
+            totals.className = 'deal-totals';
+            totals.textContent = `${this.formatCurrency(deal.comparison_quantity || 0)} → ${this.formatCurrency(deal.formatted_quantity || 0)}`;
+            dealCell.appendChild(totals);
+            row.appendChild(dealCell);
+
+            const diffCell = document.createElement('td');
+            diffCell.className = 'deal-diff';
+            diffCell.textContent = this.formatCurrency(deal.difference || 0);
+            if (typeof deal.percentage_variance === 'number') {
+                const variance = document.createElement('div');
+                variance.className = 'deal-diff-percent';
+                variance.textContent = `${deal.percentage_variance.toFixed(2)}%`;
+                diffCell.appendChild(variance);
+            }
+            row.appendChild(diffCell);
+
+            const greaterCell = document.createElement('td');
+            const greaterList = deal.greater_costs || [];
+            if (greaterList.length) {
+                greaterList.forEach((label) => {
+                    const chip = this.createCostChip(label, costMap.get(label), 'greater');
+                    greaterCell.appendChild(chip);
+                });
+            } else {
+                greaterCell.textContent = '—';
+            }
+            row.appendChild(greaterCell);
+
+            const missingCell = document.createElement('td');
+            const missingList = deal.missing_costs || [];
+            if (missingList.length) {
+                missingList.forEach((label) => {
+                    const chip = this.createCostChip(label, costMap.get(label), 'missing');
+                    missingCell.appendChild(chip);
+                });
+            } else {
+                missingCell.textContent = '—';
+            }
+            row.appendChild(missingCell);
+
+            body.appendChild(row);
+        });
+    }
+
+    createCostChip(label, cost, type) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = `deal-chip ${type}`;
+        let text = label;
+        if (cost && typeof cost.difference === 'number' && cost.difference !== 0) {
+            const absolute = Math.abs(cost.difference);
+            if (type === 'greater') {
+                text = `${label} (+${this.formatCurrency(absolute)})`;
+            } else if (type === 'missing') {
+                text = `${label} (−${this.formatCurrency(absolute)})`;
+            }
+        }
+        chip.textContent = text;
+        chip.title = `Formatted: ${this.formatCurrency(cost?.formatted || 0)} • Comparison: ${this.formatCurrency(cost?.comparison || 0)}`;
+        chip.addEventListener('click', (event) => {
+            event.stopPropagation();
+            this.toggleCostFilter(label);
+        });
+        return chip;
     }
 
     renderVarianceChart(filteredDeals) {
@@ -1106,11 +1410,24 @@ class DealComparisonDashboard {
             container.innerHTML = '<div class="empty-state">No qualifying deals for selection.</div>';
             return;
         }
-        const topDeals = filteredDeals.slice().sort((a, b) => b.difference - a.difference).slice(0, 20);
+        const topDeals = filteredDeals
+            .slice()
+            .sort((a, b) => Math.abs(b.difference || 0) - Math.abs(a.difference || 0))
+            .slice(0, 20);
         const labels = topDeals.map((deal) => deal.deal_id);
-        const formatted = topDeals.map((deal) => deal.formatted_quantity);
-        const comparison = topDeals.map((deal) => deal.comparison_quantity);
-        const difference = topDeals.map((deal) => Math.max(deal.difference, 0));
+        const formatted = topDeals.map((deal) => deal.formatted_quantity || 0);
+        const comparison = topDeals.map((deal) => deal.comparison_quantity || 0);
+        const differences = topDeals.map((deal) => deal.difference || 0);
+        const differenceColors = topDeals.map((deal) => (deal.difference >= 0 ? '#ef4444' : '#f97316'));
+        const differenceText = topDeals.map((deal) => {
+            const magnitude = Math.abs(deal.difference || 0);
+            if (!Number.isFinite(magnitude) || magnitude < 1e-6) {
+                return '';
+            }
+            const prefix = deal.difference >= 0 ? '+' : '−';
+            return `${prefix}${this.formatCurrency(magnitude)}`;
+        });
+        const varianceDescriptors = topDeals.map((deal) => (deal.difference >= 0 ? 'Higher cost' : 'Missing cost'));
 
 
         const traces = [
@@ -1136,10 +1453,14 @@ class DealComparisonDashboard {
                 type: 'bar',
                 name: 'Difference',
                 orientation: 'h',
-                x: difference,
+                x: differences,
                 y: labels,
                 base: comparison,
-
+                marker: { color: differenceColors, opacity: 0.75 },
+                text: differenceText,
+                textposition: 'outside',
+                customdata: varianceDescriptors,
+                hovertemplate: 'Deal %{y}<br>%{customdata}: %{x:$,.2f}<extra></extra>',
             }
         ];
 
@@ -1415,7 +1736,14 @@ class DealComparisonDashboard {
         deals.forEach((deal) => {
             (deal.costs || []).forEach((cost) => {
                 if (cost.status === 'Unregistered') {
-
+                    const current = registry.get(cost.cost_type) || {
+                        cost_type: cost.cost_type,
+                        impact: 0,
+                        deals: new Set(),
+                        deal_count: 0
+                    };
+                    const impactDelta = Math.abs(cost.difference || 0);
+                    current.impact = (current.impact || 0) + impactDelta;
                     current.deals.add(deal.deal_id);
                     current.deal_count = current.deals.size;
                     registry.set(cost.cost_type, current);
@@ -1437,6 +1765,8 @@ class DealComparisonDashboard {
             return [];
         }
         const deals = this.analysisData.deals.map((deal) => ({ ...deal, costs: (deal.costs || []).map((cost) => ({ ...cost })) }));
+
+        let filtered = deals;
 
         if (this.filters.deals.size) {
             filtered = filtered.filter((deal) => this.filters.deals.has(deal.deal_id));
@@ -1504,6 +1834,7 @@ class DealComparisonDashboard {
     resetFilters() {
         this.filters.deals.clear();
         this.filters.costTypes.clear();
+        this.activeStatusFilter = null;
         this.refresh();
     }
 
