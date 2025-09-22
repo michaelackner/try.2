@@ -801,6 +801,7 @@ class DealComparisonDashboard {
             costTypes: new Set()
         };
 
+
         this.elements = this.cacheElements();
         this.bindEvents();
     }
@@ -850,7 +851,7 @@ class DealComparisonDashboard {
             varianceChart: document.getElementById('dealVarianceChart'),
             waterfallChart: document.getElementById('costWaterfallChart'),
             treemapChart: document.getElementById('unregisteredTreemap'),
-            heatmapChart: document.getElementById('costHeatmap')
+
         };
     }
 
@@ -1024,7 +1025,7 @@ class DealComparisonDashboard {
             this.elements.kpiAverageVariance.textContent = `${value.toFixed(2)}%`;
         }
         if (this.elements.kpiUnregistered) {
-            this.elements.kpiUnregistered.textContent = this.formatNumber(overview.unregistered_cost_types || 0);
+
         }
     }
 
@@ -1095,6 +1096,7 @@ class DealComparisonDashboard {
         this.renderWaterfallChart(filtered);
         this.renderTreemap(filtered);
         this.renderHeatmap();
+
     }
 
     renderVarianceChart(filteredDeals) {
@@ -1109,6 +1111,7 @@ class DealComparisonDashboard {
         const formatted = topDeals.map((deal) => deal.formatted_quantity);
         const comparison = topDeals.map((deal) => deal.comparison_quantity);
         const difference = topDeals.map((deal) => Math.max(deal.difference, 0));
+
 
         const traces = [
             {
@@ -1136,14 +1139,14 @@ class DealComparisonDashboard {
                 x: difference,
                 y: labels,
                 base: comparison,
-                marker: { color: '#ef4444' },
-                hovertemplate: 'Deal %{y}<br>Difference: %{x:$,.2f}<extra></extra>'
+
             }
         ];
 
         const layout = {
             barmode: 'overlay',
             hovermode: 'closest',
+
             margin: { l: 140, r: 30, t: 20, b: 40 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
@@ -1163,13 +1166,12 @@ class DealComparisonDashboard {
             }
         };
 
-        Plotly.react(container, traces, layout, { displayModeBar: false, responsive: true });
         container.on('plotly_click', (event) => {
             if (!event || !event.points || !event.points[0]) return;
             const dealId = event.points[0].y;
             this.toggleDealFilter(dealId);
         });
-        container.on('plotly_doubleclick', () => this.resetFilters());
+
     }
 
     renderWaterfallChart(filteredDeals) {
@@ -1187,6 +1189,7 @@ class DealComparisonDashboard {
         const text = [this.formatCurrency(breakdown.comparisonTotal)];
         const colors = ['#1e3a8a'];
 
+
         breakdown.costs.forEach((cost) => {
             labels.push(cost.cost_type);
             measures.push('relative');
@@ -1194,10 +1197,7 @@ class DealComparisonDashboard {
             text.push(this.formatCurrency(cost.difference));
             if (cost.status === 'Unregistered') {
                 colors.push('#fb923c');
-            } else if (cost.difference >= 0) {
-                colors.push('#ef4444');
-            } else {
-                colors.push('#10b981');
+
             }
         });
 
@@ -1220,13 +1220,14 @@ class DealComparisonDashboard {
             increasing: { marker: { color: '#ef4444' } },
             totals: { marker: { color: '#1e3a8a' } },
             marker: { color: colors },
-            hovertemplate: '%{x}<br>%{y:$,.2f}<extra></extra>'
+
         };
 
         const layout = {
             margin: { t: 20, l: 60, r: 30, b: 60 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
+
             yaxis: {
                 title: 'USD',
                 tickprefix: '$',
@@ -1234,7 +1235,7 @@ class DealComparisonDashboard {
             }
         };
 
-        Plotly.react(container, [trace], layout, { displayModeBar: false, responsive: true });
+
         container.on('plotly_click', (event) => {
             if (!event || !event.points || !event.points[0]) return;
             const label = event.points[0].x;
@@ -1242,7 +1243,7 @@ class DealComparisonDashboard {
                 this.toggleCostFilter(label);
             }
         });
-        container.on('plotly_doubleclick', () => this.resetFilters());
+
     }
 
     renderTreemap(filteredDeals) {
@@ -1259,7 +1260,7 @@ class DealComparisonDashboard {
         const parents = ['', ...unregistered.map(() => 'Unregistered Costs')];
         const values = [totalImpact, ...unregistered.map((item) => item.impact)];
         const colors = [0, ...unregistered.map((item) => item.deal_count)];
-        const text = ['Total', ...unregistered.map((item) => `${item.deal_count} deals`)].map((info, idx) => `${labels[idx]}<br>${info}`);
+
 
         const trace = {
             type: 'treemap',
@@ -1267,8 +1268,7 @@ class DealComparisonDashboard {
             parents,
             values,
             textinfo: 'label+value',
-            hovertemplate: '<b>%{label}</b><br>Impact: %{value:$,.2f}<extra>%{customdata}</extra>',
-            customdata: ['Overall', ...unregistered.map((item) => `${item.deal_count} deals`)],
+
             marker: {
                 colors,
                 colorscale: 'YlOrRd'
@@ -1281,7 +1281,7 @@ class DealComparisonDashboard {
             plot_bgcolor: 'rgba(0,0,0,0)'
         };
 
-        Plotly.react(container, [trace], layout, { displayModeBar: false, responsive: true });
+
         container.on('plotly_click', (event) => {
             if (!event || !event.points || !event.points[0]) return;
             const label = event.points[0].label;
@@ -1352,6 +1352,7 @@ class DealComparisonDashboard {
             margin: { t: 30, l: 140, r: 20, b: 80 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
+
             xaxis: {
                 tickangle: -45,
                 automargin: true
@@ -1361,7 +1362,7 @@ class DealComparisonDashboard {
             }
         };
 
-        Plotly.react(container, [trace], layout, { displayModeBar: false, responsive: true });
+
         container.on('plotly_click', (event) => {
             if (!event || !event.points || !event.points[0]) return;
             const point = event.points[0];
@@ -1374,7 +1375,7 @@ class DealComparisonDashboard {
                 this.toggleCostFilter(costType);
             }
         });
-        container.on('plotly_doubleclick', () => this.resetFilters());
+
     }
 
     aggregateCostBreakdown(deals) {
@@ -1414,8 +1415,7 @@ class DealComparisonDashboard {
         deals.forEach((deal) => {
             (deal.costs || []).forEach((cost) => {
                 if (cost.status === 'Unregistered') {
-                    const current = registry.get(cost.cost_type) || { cost_type: cost.cost_type, impact: 0, deal_count: 0, deals: new Set() };
-                    current.impact += Math.abs(cost.difference || 0);
+
                     current.deals.add(deal.deal_id);
                     current.deal_count = current.deals.size;
                     registry.set(cost.cost_type, current);
@@ -1425,17 +1425,19 @@ class DealComparisonDashboard {
         return Array.from(registry.values()).map((item) => ({
             cost_type: item.cost_type,
             impact: item.impact,
+
             deal_count: item.deal_count,
             deals: Array.from(item.deals)
         })).sort((a, b) => b.impact - a.impact);
     }
+
 
     getFilteredDeals() {
         if (!this.analysisData?.deals) {
             return [];
         }
         const deals = this.analysisData.deals.map((deal) => ({ ...deal, costs: (deal.costs || []).map((cost) => ({ ...cost })) }));
-        let filtered = deals;
+
         if (this.filters.deals.size) {
             filtered = filtered.filter((deal) => this.filters.deals.has(deal.deal_id));
         }
