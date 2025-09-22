@@ -509,19 +509,7 @@ class DealComparisonAnalyzer:
                     unregistered_for_deal.append(cost.label)
                     tracker = unregistered_cost_tracker.setdefault(
                         cost.label,
-                        {"total_difference": 0.0, "deals": set()},
-                    )
-                    tracker["total_difference"] += difference
-                    tracker["deals"].add(deal_id)
-                elif missing_flag:
-                    status = "Missing"
-                    missing_for_deal.append(cost.label)
-                elif has_formatted or has_comparison:
-                    variance = (
-                        abs(difference) / comparison_value * 100
-                        if abs(comparison_value) > epsilon
-                        else 0.0
-                    )
+
                     if variance >= 5:
                         status = "Partial"
                         partial_for_deal.append(cost.label)
@@ -806,15 +794,10 @@ class DealComparisonAnalyzer:
 
                 status_row.append(status)
                 value_row.append(value)
+                diff_value = float(formatted_value) - float(comparison_value)
+                direction = "↑" if diff_value > 0 else ("↓" if diff_value < 0 else "–")
                 hover_row.append(
-                    "Status: "
-                    + status
-                    + "<br>Formatted: "
-                    + _format_currency(float(formatted_value))
-                    + "<br>Comparison: "
-                    + _format_currency(float(comparison_value))
-                    + "<br>Difference: "
-                    + _format_currency(float(difference))
+
                 )
 
             status_matrix.append(status_row)
@@ -1003,18 +986,7 @@ class DealComparisonAnalyzer:
                 unregistered_costs, key=lambda item: item["impact"], default=None
             )
             if top_unregistered:
-                impacted_count = top_unregistered.get("deal_count", 0)
-                impact = _format_currency(top_unregistered["impact"])
-                if impacted_count:
-                    unregistered_summary = (
-                        f"Unregistered costs remain for {top_unregistered['cost_type']} "
-                        f"across {impacted_count} deals totaling {impact}."
-                    )
-                else:
-                    unregistered_summary = (
-                        f"Unregistered costs remain for {top_unregistered['cost_type']} "
-                        f"totaling {impact}."
-                    )
+
             else:
                 unregistered_summary = "Unregistered cost details unavailable."
         else:

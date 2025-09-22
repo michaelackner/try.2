@@ -558,6 +558,26 @@ body, .dashboard, .dashboard-main, .dashboard-header {
     text-align: center;
 }
 
+.chart-header.compact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    flex-wrap: wrap;
+    text-align: left;
+    margin-bottom: var(--space-lg);
+}
+
+.chart-header.compact .chart-summary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.chart-header.compact .chart-badge {
+    margin: 0;
+}
+
 .chart-header h3 {
     font-size: 1.25rem;
     font-weight: 600;
@@ -625,6 +645,12 @@ body, .dashboard, .dashboard-main, .dashboard-header {
     font-weight: 600;
     font-size: 12px;
     border: 1px solid var(--gray-200);
+}
+
+.chart-badge.accent {
+    background: rgba(249, 115, 22, 0.12);
+    border-color: rgba(249, 115, 22, 0.35);
+    color: var(--accent-orange-600);
 }
 
 /* Date range toggle */
