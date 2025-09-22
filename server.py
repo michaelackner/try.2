@@ -474,9 +474,15 @@ class ExcelProcessor:
                     new_value = row_values[col_idx - 1]
                     old_value = existing_values[col_idx - 1]
 
-                    if self.values_differ(new_value, old_value) and self.should_highlight_cell(col_idx, new_value):
-                        cell = ws.cell(row=row_idx, column=col_idx)
+                    if not self.should_highlight_cell(col_idx, new_value):
+                        continue
+
+                    cell = ws.cell(row=row_idx, column=col_idx)
+
+                    if self.values_differ(new_value, old_value):
                         self.mark_cell_red(cell)
+                    elif not self.is_blank(new_value):
+                        self.mark_cell_green(cell)
             else:
                 # Entire deal is new – mark populated cells
                 for col_idx in range(1, 23):
@@ -553,19 +559,21 @@ class ExcelProcessor:
         if isinstance(old_value, datetime):
             old_value = old_value.strftime('%d/%m/%Y')
 
-        # Strip strings for comparison
+        new_numeric = self.coerce_to_float(new_value)
+        old_numeric = self.coerce_to_float(old_value)
+
+        if new_numeric is not None and old_numeric is not None:
+            return abs(new_numeric - old_numeric) > 0.0001
+
         if isinstance(new_value, str):
             new_value = new_value.strip()
         if isinstance(old_value, str):
             old_value = old_value.strip()
 
-        # Compare numerics with tolerance
-        try:
-            new_float = float(new_value)
-            old_float = float(old_value)
-            return abs(new_float - old_float) > 0.0001
-        except (TypeError, ValueError):
-            return new_value != old_value
+        if isinstance(new_value, str) and isinstance(old_value, str):
+            return new_value.casefold() != old_value.casefold()
+
+        return new_value != old_value
 
     def should_highlight_cell(self, col_idx: int, value) -> bool:
         """Determine if a cell should be highlighted based on column and value."""
@@ -576,6 +584,9 @@ class ExcelProcessor:
         # Skip comment columns (M, U, V)
         if col_idx in {13, 21, 22}:
             return False
+
+        if col_idx == 2:  # Always highlight deal identifiers
+            return True
 
         return self.is_numeric_value(value)
 
@@ -592,26 +603,19 @@ class ExcelProcessor:
     def is_numeric_value(self, value) -> bool:
         """Return True if the provided value is numeric or can be safely cast to float."""
 
-        if isinstance(value, bool):
-            return False
-
-        if isinstance(value, Number):
-            return True
-
-        if isinstance(value, str):
-            try:
-                float(value)
-                return True
-            except ValueError:
-                return False
-
-        return False
+        return self.coerce_to_float(value) is not None
 
     def mark_cell_red(self, cell) -> None:
         """Apply a red font color to highlight changes without altering other attributes."""
 
         font = cell.font or Font(name='Arial')
         cell.font = font.copy(color='00FF0000')
+
+    def mark_cell_green(self, cell) -> None:
+        """Apply a green font color to highlight matches without altering other attributes."""
+
+        font = cell.font or Font(name='Arial')
+        cell.font = font.copy(color='00008000')
 
     def normalize(self, value) -> str:
         """Normalize values for consistent comparison"""
@@ -653,6 +657,46 @@ class ExcelProcessor:
             return float(value) if value else 0.0
         except (ValueError, TypeError):
             return 0.0
+
+    def coerce_to_float(self, value) -> Optional[float]:
+        """Attempt to coerce a value into a float while tolerating formatted strings."""
+
+        if value is None:
+            return None
+
+        if isinstance(value, bool):
+            return None
+
+        if isinstance(value, Number):
+            return float(value)
+
+        if isinstance(value, str):
+            cleaned = value.strip()
+
+            if not cleaned:
+                return None
+
+            negative = cleaned.startswith('(') and cleaned.endswith(')')
+
+            if negative:
+                cleaned = cleaned[1:-1]
+
+            # Remove common formatting artifacts
+            for token in [',', '$', '€', 'USD', 'US$', ' ']:
+                cleaned = cleaned.replace(token, '')
+
+            cleaned = cleaned.strip()
+
+            if not cleaned:
+                return None
+
+            try:
+                number = float(cleaned)
+                return -number if negative else number
+            except ValueError:
+                return None
+
+        return None
 
 @app.post("/process")
 async def process_excel(
