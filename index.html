@@ -209,7 +209,179 @@
                     </div>
                 </div>
 
-                
+
+            </section>
+
+            <!-- Deal Comparison Analysis Module -->
+            <section class="comparison-card" id="comparisonModule">
+                <div class="card-header">
+                    <h2>Deal Comparison Analysis</h2>
+                    <p>Spotlight deals where processed quantities exceed the reference workbook</p>
+                </div>
+
+                <div class="comparison-upload-grid">
+                    <div class="comparison-upload">
+                        <span class="upload-label">Processed workbook (formatted)</span>
+                        <input type="file" id="comparisonFormattedInput" accept=".xlsx,.xls" hidden>
+                        <label for="comparisonFormattedInput" class="upload-zone compact">
+                            <div class="upload-icon">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13,3.5L18.5,9H13V3.5Z" />
+                                </svg>
+                            </div>
+                            <div class="upload-text">
+                                <span class="upload-title">Upload processed Excel</span>
+                                <span class="upload-subtitle">Column L must contain total USD</span>
+                            </div>
+                        </label>
+                        <div class="file-selected" id="comparisonFormattedInfo" style="display:none;">
+                            <div class="file-details">
+                                <span id="comparisonFormattedName"></span>
+                                <button class="clear-btn" id="clearComparisonFormatted" type="button">×</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="comparison-upload">
+                        <span class="upload-label">Reference workbook (comparison)</span>
+                        <input type="file" id="comparisonReferenceInput" accept=".xlsx,.xls" hidden>
+                        <label for="comparisonReferenceInput" class="upload-zone compact">
+                            <div class="upload-icon">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13,3.5L18.5,9H13V3.5Z" />
+                                </svg>
+                            </div>
+                            <div class="upload-text">
+                                <span class="upload-title">Upload comparison Excel</span>
+                                <span class="upload-subtitle">Used as baseline totals</span>
+                            </div>
+                        </label>
+                        <div class="file-selected" id="comparisonReferenceInfo" style="display:none;">
+                            <div class="file-details">
+                                <span id="comparisonReferenceName"></span>
+                                <button class="clear-btn" id="clearComparisonReference" type="button">×</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <details class="comparison-settings">
+                    <summary>Advanced comparison settings</summary>
+                    <div class="comparison-settings-grid">
+                        <input type="text" id="comparisonFormattedSheet" placeholder="Formatted sheet name (optional)">
+                        <input type="text" id="comparisonReferenceSheet" placeholder="Reference sheet name (optional)">
+                        <input type="text" id="comparisonQuantityColumn" placeholder="Reference total column (optional)">
+                        <input type="text" id="comparisonFormattedLetter" value="L" placeholder="Formatted total column letter">
+                    </div>
+                </details>
+
+                <div class="comparison-actions">
+                    <button class="process-btn" id="compareButton" disabled>
+                        <span>Analyze Deals</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+                        </svg>
+                    </button>
+                    <div class="loading-indicator" id="comparisonLoading" style="display:none;">
+                        <div class="loading-spinner"></div>
+                        <span>Calculating discrepancies...</span>
+                    </div>
+                </div>
+
+                <div class="error-card compact" id="comparisonError" style="display:none;">
+                    <div class="error-content">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
+                        </svg>
+                        <span id="comparisonErrorMessage"></span>
+                    </div>
+                </div>
+
+                <div class="comparison-results" id="comparisonResults" style="display:none;">
+                    <div class="comparison-top-grid">
+                        <div class="comparison-kpis">
+                            <div class="comparison-kpi">
+                                <span class="kpi-label">Deals with variance</span>
+                                <span class="kpi-value" id="kpiDeals">-</span>
+                            </div>
+                            <div class="comparison-kpi">
+                                <span class="kpi-label">Total USD discrepancy</span>
+                                <span class="kpi-value" id="kpiDifference">-</span>
+                            </div>
+                            <div class="comparison-kpi">
+                                <span class="kpi-label">Average variance %</span>
+                                <span class="kpi-value" id="kpiAverageVariance">-</span>
+                            </div>
+                            <div class="comparison-kpi">
+                                <span class="kpi-label">Unregistered cost types</span>
+                                <span class="kpi-value" id="kpiUnregistered">-</span>
+                            </div>
+                        </div>
+                        <div class="comparison-filters" id="comparisonFilters" aria-live="polite"></div>
+                    </div>
+
+                    <div class="comparison-grid-layout">
+                        <div class="comparison-main">
+                            <div class="chart-card" id="comparisonBarCard">
+                                <div class="chart-header compact">
+                                    <h3>Top Deal Variances (Processed Above Reference)</h3>
+                                    <span class="chart-subtitle">Drag or use the zoom controls to inspect the top 20 positive USD gaps</span>
+                                </div>
+                                <div id="dealVarianceChart" class="chart-container"></div>
+                            </div>
+
+                            <div class="chart-card" id="comparisonWaterfallCard">
+                                <div class="chart-header compact">
+                                    <h3>Cost Breakdown Waterfall</h3>
+                                    <span class="chart-subtitle">Zoom to focus on categories driving the processed over reference variance</span>
+                                </div>
+                                <div id="costWaterfallChart" class="chart-container"></div>
+                            </div>
+                        </div>
+
+                        <div class="comparison-bottom">
+                            <div class="chart-card" id="comparisonHeatmapCard">
+                                <div class="chart-header compact">
+                                    <h3>Detailed Comparison Matrix</h3>
+                                    <span class="chart-subtitle">Pan and zoom across cost types and deals to explore variance intensity</span>
+                                </div>
+                                <div id="costHeatmap" class="chart-container"></div>
+                            </div>
+                            <div class="chart-card" id="comparisonTreemapCard">
+                                <div class="chart-header compact">
+                                    <h3>Unregistered Cost Spotlight</h3>
+                                    <span class="chart-subtitle">Use the controls to drill into high-impact unregistered costs</span>
+                                </div>
+                                <div id="unregisteredTreemap" class="chart-container"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="comparison-insights">
+                        <div class="insights-header">
+                            <h3>Insights & Recommended Actions</h3>
+                            <div class="export-actions">
+                                <button class="btn ghost" data-export="excel">Export Excel</button>
+                                <button class="btn ghost" data-export="csv">Download CSV</button>
+                                <button class="btn ghost" data-export="pdf">Summary PDF</button>
+                            </div>
+                        </div>
+                        <div class="insights-body">
+                            <p id="comparisonHeadline" class="insight-highlight"></p>
+                            <p id="comparisonTopDeals" class="insight-text"></p>
+                            <p id="comparisonCostSummary" class="insight-text"></p>
+                            <ul id="comparisonRecommendations" class="insight-list"></ul>
+                            <div class="anomaly-container">
+                                <h4>Anomaly Detection</h4>
+                                <ul id="comparisonAnomalies" class="insight-list"></ul>
+                            </div>
+                            <div class="pattern-container">
+                                <h4>Pattern Recognition</h4>
+                                <ul id="comparisonPatterns" class="insight-list"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
         </main>
 
@@ -223,6 +395,8 @@
     <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Chart.js for interactive product distribution -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Plotly for interactive deal comparison charts -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <!-- Chart.js for interactive product distribution -->
     <script src="app.js"></script>
 </body>
